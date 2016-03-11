@@ -21,6 +21,9 @@
 @property (nonatomic, retain) NSDate *lastMessageDate;
 @property (nonatomic, copy) NSString *latestMessageId;
 @property (nonatomic, copy) NSString *messageDraft;
+
+- (TSInteraction *) lastInteraction;
+
 @end
 
 @implementation TSThread
@@ -93,6 +96,14 @@
 
 #pragma mark Last Interactions
 
+- (TSInteraction *) lastInteraction {
+    __block TSInteraction *last;
+    [TSStorageManager.sharedManager.dbConnection readWithBlock:^(YapDatabaseReadTransaction *transaction){
+        last = [[transaction ext:TSMessageDatabaseViewExtensionName] lastObjectInGroup:self.uniqueId];
+    }];
+    return (TSInteraction *)last;
+}
+
 - (NSDate *)lastMessageDate {
     if (_lastMessageDate) {
         return _lastMessageDate;
@@ -102,12 +113,11 @@
 }
 
 - (NSString *)lastMessageLabel {
-    __block TSInteraction *interaction;
-    [[TSStorageManager sharedManager]
-            .dbConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
-      interaction = [TSInteraction fetchObjectWithUniqueID:self.latestMessageId transaction:transaction];
-    }];
-    return interaction.description;
+    if (self.lastInteraction == nil) {
+        return @"";
+    } else {
+        return self.lastInteraction.description;
+    }
 }
 
 - (void)updateWithLastMessage:(TSInteraction *)lastMessage transaction:(YapDatabaseReadWriteTransaction *)transaction {
