@@ -19,7 +19,6 @@
 @property (nonatomic, retain) NSDate *creationDate;
 @property (nonatomic, copy) NSDate *archivalDate;
 @property (nonatomic, retain) NSDate *lastMessageDate;
-@property (nonatomic, copy) NSString *latestMessageId;
 @property (nonatomic, copy) NSString *messageDraft;
 
 - (TSInteraction *) lastInteraction;
@@ -37,7 +36,6 @@
 
     if (self) {
         _archivalDate    = nil;
-        _latestMessageId = nil;
         _lastMessageDate = nil;
         _creationDate    = [NSDate date];
         _messageDraft    = nil;
@@ -65,15 +63,12 @@
 #pragma mark Read Status
 
 - (BOOL)hasUnreadMessages {
-    __block TSInteraction *interaction;
-    __block BOOL hasUnread = NO;
-    [[TSStorageManager sharedManager]
-            .dbConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
-      interaction = [TSInteraction fetchObjectWithUniqueID:self.latestMessageId transaction:transaction];
-      if ([interaction isKindOfClass:[TSIncomingMessage class]]) {
-          hasUnread = ![(TSIncomingMessage *)interaction wasRead];
-      }
-    }];
+    TSInteraction *interaction = self.lastInteraction;
+    BOOL hasUnread = NO;
+
+    if ([interaction isKindOfClass:[TSIncomingMessage class]]) {
+        hasUnread = ![(TSIncomingMessage *)interaction wasRead];
+    }
 
     return hasUnread;
 }
@@ -129,7 +124,6 @@
     }
 
     if (!_lastMessageDate || [lastMessageDate timeIntervalSinceDate:self.lastMessageDate] > 0) {
-        _latestMessageId = lastMessage.uniqueId;
         _lastMessageDate = lastMessageDate;
 
         [self saveWithTransaction:transaction];
