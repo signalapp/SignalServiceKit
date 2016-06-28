@@ -37,16 +37,16 @@
 
 - (NSString *)fullName {
     NSMutableString *fullName = [NSMutableString string];
-    if (_firstName)
-        [fullName appendString:_firstName];
-    if (_lastName) {
-        [fullName appendString:[NSString stringWithFormat:@" %@", _lastName]];
+    if (self.firstName)
+        [fullName appendString:self.firstName];
+    if (self.lastName) {
+        [fullName appendString:[NSString stringWithFormat:@" %@", self.lastName]];
     }
     return fullName;
 }
 
 - (NSString *)description {
-    return [NSString stringWithFormat:@"%@ %@: %@", _firstName, _lastName, _userTextPhoneNumbers];
+    return [NSString stringWithFormat:@"%@ %@: %@", self.firstName, self.lastName, self.userTextPhoneNumbers];
 }
 
 - (BOOL)isSignalContact {
