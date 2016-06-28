@@ -3,11 +3,6 @@
 #import "SignalRecipient.h"
 #import "TSStorageManager.h"
 
-static NSString *const DEFAULTS_KEY_CONTACT      = @"DefaultsKeyContact";
-static NSString *const DEFAULTS_KEY_PHONE_NUMBER = @"DefaultsKeyPhoneNumber";
-static NSString *const DEFAULTS_KEY_CALL_TYPE    = @"DefaultsKeycallType";
-static NSString *const DEFAULTS_KEY_DATE         = @"DefaultsKeyDate";
-
 @implementation Contact
 
 #if TARGET_OS_IOS
@@ -48,15 +43,6 @@ static NSString *const DEFAULTS_KEY_DATE         = @"DefaultsKeyDate";
         [fullName appendString:[NSString stringWithFormat:@" %@", _lastName]];
     }
     return fullName;
-}
-
-- (NSString *)allPhoneNumbers {
-    NSString *allNumbers = @"";
-    for (PhoneNumber *number in self.parsedPhoneNumbers) {
-        allNumbers = [allNumbers stringByAppendingString:number.toE164];
-        allNumbers = [allNumbers stringByAppendingString:@";"];
-    }
-    return allNumbers;
 }
 
 - (NSString *)description {

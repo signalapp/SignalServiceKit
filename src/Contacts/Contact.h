@@ -18,7 +18,7 @@
 @property (readonly, nonatomic) NSString *notes;
 
 - (NSString *)fullName;
-- (NSString *)allPhoneNumbers;
+
 
 - (BOOL)isSignalContact;
 - (NSArray<NSString *> *)textSecureIdentifiers;
