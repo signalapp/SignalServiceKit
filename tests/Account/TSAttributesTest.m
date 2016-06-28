@@ -36,8 +36,7 @@
                                 @"voice": @1 };
 
     NSDictionary *actual = [TSAttributes attributesWithSignalingKey:@"fake-signaling-key"
-                                                    serverAuthToken:@"fake-server-auth-token"
-                                                      supportsVoice:YES];
+                                                    serverAuthToken:@"fake-server-auth-token"];
 
     XCTAssertEqualObjects(expected, actual);
 }
