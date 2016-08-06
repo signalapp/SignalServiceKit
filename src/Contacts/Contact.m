@@ -39,10 +39,13 @@
     NSMutableString *fullName = [NSMutableString string];
     if (self.firstName)
         [fullName appendString:self.firstName];
-    if (self.lastName) {
-        [fullName appendString:[NSString stringWithFormat:@" %@", self.lastName]];
+    if (ABPersonGetCompositeNameFormat() == kABPersonCompositeNameFormatFirstNameFirst) {
+            [fullName appendString:[NSString stringWithFormat:@" %@", self.lastName]];
+        } else {
+            [fullName insertString:[NSString stringWithFormat:@"%@ ", self.lastName] atIndex:0];
+        }
     }
-    return fullName;
+    return [fullName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
 - (NSString *)description {
