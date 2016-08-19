@@ -39,7 +39,7 @@
     NSMutableString *fullName = [NSMutableString string];
     if (self.firstName) {
         [fullName appendString:self.firstName];
-        }
+    }
     if (self.lastName) {
         if (ABPersonGetCompositeNameFormat() == kABPersonCompositeNameFormatFirstNameFirst) {
             [fullName appendString:[NSString stringWithFormat:@" %@", self.lastName]];
