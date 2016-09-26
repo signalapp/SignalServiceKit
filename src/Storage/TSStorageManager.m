@@ -101,10 +101,10 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
                 collection,
                 data,
                 exception.reason);
-            DDLogError(@"%@ Raising exception.", self.tag);
-            @throw exception;
-            //            DDLogWarn(@"%@ Ignoring exception.", self.tag);
-            //            return nil;
+            // DDLogError(@"%@ Raising exception.", self.tag);
+            // @throw exception;
+            DDLogWarn(@"%@ Ignoring exception.", self.tag);
+            return nil;
         }
     };
 }

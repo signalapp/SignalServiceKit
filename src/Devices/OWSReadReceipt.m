@@ -80,7 +80,8 @@ NSString *const SenderIdColumn = @"senderId";
             }
         }];
 
-    YapDatabaseSecondaryIndex *index = [[YapDatabaseSecondaryIndex alloc] initWithSetup:setup handler:handler];
+    YapDatabaseSecondaryIndex *index =
+        [[YapDatabaseSecondaryIndex alloc] initWithSetup:setup handler:handler versionTag:@"3"];
     [database registerExtension:index withName:IndexOnSenderIdAndTimestamp];
 }
 
