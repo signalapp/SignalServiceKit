@@ -67,19 +67,19 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
         if (!data || data.length <= 0) {
             return nil;
         }
+
         @try {
             return [NSKeyedUnarchiver unarchiveObjectWithData:data];
         } @catch (NSException *exception) {
             // Sync log in case we bail.
-            NSLog(@"%@ Unarchiving key:%@ from collection:%@ and data %@ failed with error: %@",
-                [self tag],
+            DDLogDebug(@"%@ Unarchiving key:%@ from collection:%@ and data %@ failed with error: %@",
+                self.tag,
                 key,
                 collection,
                 data,
                 exception.reason);
-            // Sync log in case we bail.
-            NSLog(@"%@ Raising exception since deserialization failed", [self tag]);
-            [exception raise];
+            DDLogDebug(@"%@ Ignoring exception.", self.tag);
+            return nil;
         }
     };
 }
@@ -100,12 +100,10 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
     // Seeing this raise an exception-on-boot for some users, making it impossible to get any good data.
     @try {
         [OWSReadReceipt registerIndexOnSenderIdAndTimestampWithDatabase:self.database];
-    }
-    @catch (NSException *exception) {
+    } @catch (NSException *exception) {
         DDLogError(@"%@ Failed to register read receipt index with exception: %@ with reason: %@", self.tag, exception, exception.reason);
     }
 }
-
 
 - (void)protectSignalFiles {
     [self protectFolderAtPath:[TSAttachmentStream attachmentsFolder]];
@@ -320,6 +318,8 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 
     [[self init] setupDatabase];
 }
+
+#pragma mark - Logging
 
 + (NSString *)tag
 {
