@@ -52,7 +52,25 @@ NSString *const TSIncomingMessageWasReadOnThisDeviceNotification = @"TSIncomingM
                       messageBody:(nullable NSString *)body
                     attachmentIds:(NSArray<NSString *> *)attachmentIds
 {
-    self = [super initWithTimestamp:timestamp inThread:thread messageBody:body attachmentIds:attachmentIds];
+    return [self initWithTimestamp:timestamp
+                          inThread:thread
+                       messageBody:body
+                     attachmentIds:attachmentIds
+                  expiresInSeconds:0];
+}
+
+- (instancetype)initWithTimestamp:(uint64_t)timestamp
+                         inThread:(nullable TSGroupThread *)thread
+                         authorId:(nullable NSString *)authorId
+                      messageBody:(nullable NSString *)body
+                    attachmentIds:(NSArray<NSString *> *)attachmentIds
+                 expiresInSeconds:(uint32_t)expiresInSeconds
+{
+    self = [super initWithTimestamp:timestamp
+                           inThread:thread
+                        messageBody:body
+                      attachmentIds:attachmentIds
+                   expiresInSeconds:expiresInSeconds];
 
     if (!self) {
         return self;
@@ -107,9 +125,20 @@ NSString *const TSIncomingMessageWasReadOnThisDeviceNotification = @"TSIncomingM
     }];
 }
 
-- (void)markAsReadWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+- (void)markAsReadLocallyWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
 {
     [self markAsReadWithoutNotificationWithTransaction:transaction];
+    [[NSNotificationCenter defaultCenter] postNotificationName:TSIncomingMessageWasReadOnThisDeviceNotification
+                                                        object:self];
+}
+
+- (void)markAsReadLocally
+{
+    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+        [self markAsReadWithoutNotificationWithTransaction:transaction];
+    }];
+    // Notification must happen outside of the transaction, else we'll likely crash when the notification receiver
+    // tries to do anything with the DB.
     [[NSNotificationCenter defaultCenter] postNotificationName:TSIncomingMessageWasReadOnThisDeviceNotification
                                                         object:self];
 }
