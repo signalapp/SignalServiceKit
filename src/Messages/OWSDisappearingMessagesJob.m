@@ -109,11 +109,30 @@ NS_ASSUME_NONNULL_BEGIN
 
     int startedSecondsAgo = [NSDate new].timeIntervalSince1970 - expirationStartedAt / 1000.0;
     DDLogDebug(@"%@ Starting expiration for message read %d seconds ago", self.tag, startedSecondsAgo);
-    message.expireStartedAt = expirationStartedAt;
-    [message save];
+
+    // Don't clobber if multiple actions simultaneously triggered expiration.
+    if (message.expireStartedAt == 0 || message.expireStartedAt > expirationStartedAt) {
+        message.expireStartedAt = expirationStartedAt;
+        [message save];
+    }
 
     // Necessary that the async expiration run happens *after* the message is saved with expiration configuration.
     [self runBy:message.expiresAt];
+}
+
+- (void)setExpirationsForThread:(TSThread *)thread
+{
+    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    [self.disappearingMessagesFinder
+        enumerateUnstartedExpiringMessagesInThread:thread
+                                             block:^(TSMessage *_Nonnull message) {
+                                                 DDLogWarn(@"%@ Starting expiring message which should have already "
+                                                           @"been started.",
+                                                     self.tag);
+                                                 // specify "now" in case D.M. have since been disabled, but we have
+                                                 // existing unstarted expiring messages that still need to expire.
+                                                 [self setExpirationForMessage:message expirationStartedAt:now];
+                                             }];
 }
 
 - (void)runBy:(uint64_t)timestamp

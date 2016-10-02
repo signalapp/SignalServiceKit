@@ -13,6 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface OWSDisappearingMessagesFinder (Testing)
 
 - (NSArray<TSMessage *> *)fetchExpiredMessages;
+- (NSArray<TSMessage *> *)fetchUnstartedExpiringMessagesInThread:(TSThread *)thread;
 
 @end
 
@@ -69,6 +70,14 @@ NS_ASSUME_NONNULL_BEGIN
                                                            expireStartedAt:self.now - 10000];
     [notYetExpiredMessage save];
 
+    TSMessage *unreadExpiringMessage = [[TSMessage alloc] initWithTimestamp:1
+                                                                   inThread:self.thread
+                                                                messageBody:@"unereadExpiringMessage"
+                                                              attachmentIds:@[]
+                                                           expiresInSeconds:10
+                                                            expireStartedAt:0];
+    [unreadExpiringMessage save];
+
     TSMessage *unExpiringMessage = [[TSMessage alloc] initWithTimestamp:1
                                                                inThread:self.thread
                                                             messageBody:@"unexpiringMessage"
@@ -83,6 +92,49 @@ NS_ASSUME_NONNULL_BEGIN
 
     NSArray<TSMessage *> *actualMessages = [self.finder fetchExpiredMessages];
     NSArray<TSMessage *> *expectedMessages = @[ expiredMessage1, expiredMessage2 ];
+    XCTAssertEqualObjects(expectedMessages, actualMessages);
+}
+
+- (void)testUnstartedExpiredMessagesForThread
+{
+    TSMessage *expiredMessage = [[TSMessage alloc] initWithTimestamp:1
+                                                            inThread:self.thread
+                                                         messageBody:@"expiredMessage2"
+                                                       attachmentIds:@[]
+                                                    expiresInSeconds:2
+                                                     expireStartedAt:self.now - 2001];
+    [expiredMessage save];
+
+    TSMessage *notYetExpiredMessage = [[TSMessage alloc] initWithTimestamp:1
+                                                                  inThread:self.thread
+                                                               messageBody:@"notYetExpiredMessage"
+                                                             attachmentIds:@[]
+                                                          expiresInSeconds:20
+                                                           expireStartedAt:self.now - 10000];
+    [notYetExpiredMessage save];
+
+    TSMessage *unreadExpiringMessage = [[TSMessage alloc] initWithTimestamp:1
+                                                                   inThread:self.thread
+                                                                messageBody:@"unereadExpiringMessage"
+                                                              attachmentIds:@[]
+                                                           expiresInSeconds:10
+                                                            expireStartedAt:0];
+    [unreadExpiringMessage save];
+
+    TSMessage *unExpiringMessage = [[TSMessage alloc] initWithTimestamp:1
+                                                               inThread:self.thread
+                                                            messageBody:@"unexpiringMessage"
+                                                          attachmentIds:@[]
+                                                       expiresInSeconds:0
+                                                        expireStartedAt:0];
+    [unExpiringMessage save];
+
+    TSMessage *unExpiringMessage2 =
+        [[TSMessage alloc] initWithTimestamp:1 inThread:self.thread messageBody:@"unexpiringMessage2"];
+    [unExpiringMessage2 save];
+
+    NSArray<TSMessage *> *actualMessages = [self.finder fetchUnstartedExpiringMessagesInThread:self.thread];
+    NSArray<TSMessage *> *expectedMessages = @[ unreadExpiringMessage ];
     XCTAssertEqualObjects(expectedMessages, actualMessages);
 }
 

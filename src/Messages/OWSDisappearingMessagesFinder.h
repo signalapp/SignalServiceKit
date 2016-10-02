@@ -5,6 +5,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class TSStorageManager;
 @class TSMessage;
+@class TSThread;
 
 @interface OWSDisappearingMessagesFinder : NSObject
 
@@ -14,6 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)defaultInstance;
 
 - (void)enumerateExpiredMessagesWithBlock:(void (^_Nonnull)(TSMessage *message))block;
+- (void)enumerateUnstartedExpiringMessagesInThread:(TSThread *)thread block:(void (^_Nonnull)(TSMessage *message))block;
 
 /**
  * @return

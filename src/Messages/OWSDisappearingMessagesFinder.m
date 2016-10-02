@@ -5,14 +5,16 @@
 #import "NSDate+millisecondTimeStamp.h"
 #import "TSMessage.h"
 #import "TSStorageManager.h"
+#import "TSThread.h"
 #import <YapDatabase/YapDatabaseConnection.h>
 #import <YapDatabase/YapDatabaseQuery.h>
 #import <YapDatabase/YapDatabaseSecondaryIndex.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
+static NSString *const OWSDisappearingMessageFinderThreadIdColumn = @"thread_id";
 static NSString *const OWSDisappearingMessageFinderExpiresAtColumn = @"expires_at";
-static NSString *const OWSDisappearingMessageFinderExpiresAtIndex = @"index_messages_on_expires_at";
+static NSString *const OWSDisappearingMessageFinderExpiresAtIndex = @"index_messages_on_expires_at_and_thread_id";
 
 @interface OWSDisappearingMessagesFinder ()
 
@@ -44,6 +46,26 @@ static NSString *const OWSDisappearingMessageFinderExpiresAtIndex = @"index_mess
         defaultInstance = [[self alloc] initWithStorageManager:[TSStorageManager sharedManager]];
     });
     return defaultInstance;
+}
+
+- (NSArray<NSString *> *)fetchUnstartedExpiringMessageIdsInThread:(TSThread *)thread
+{
+    NSMutableArray<NSString *> *messageIds = [NSMutableArray new];
+    NSString *formattedString = [NSString stringWithFormat:@"WHERE %@ = 0 AND %@ = \"%@\"",
+                                          OWSDisappearingMessageFinderExpiresAtColumn,
+                                          OWSDisappearingMessageFinderThreadIdColumn,
+                                          thread.uniqueId];
+
+    YapDatabaseQuery *query = [YapDatabaseQuery queryWithFormat:formattedString];
+    [self.dbConnection readWithBlock:^(YapDatabaseReadTransaction *_Nonnull transaction) {
+        [[transaction ext:OWSDisappearingMessageFinderExpiresAtIndex]
+            enumerateKeysMatchingQuery:query
+                            usingBlock:^void(NSString *collection, NSString *key, BOOL *stop) {
+                                [messageIds addObject:key];
+                            }];
+    }];
+
+    return [messageIds copy];
 }
 
 - (NSArray<NSString *> *)fetchExpiredMessageIds
@@ -92,6 +114,33 @@ static NSString *const OWSDisappearingMessageFinderExpiresAtIndex = @"index_mess
     return nil;
 }
 
+- (void)enumerateUnstartedExpiringMessagesInThread:(TSThread *)thread block:(void (^_Nonnull)(TSMessage *message))block
+{
+    for (NSString *expiringMessageId in [self fetchUnstartedExpiringMessageIdsInThread:thread]) {
+        TSMessage *_Nullable message = [TSMessage fetchObjectWithUniqueID:expiringMessageId];
+        if ([message isKindOfClass:[TSMessage class]]) {
+            block(message);
+        } else {
+            DDLogError(@"%@ unexpected object: %@", self.tag, message);
+        }
+    }
+}
+
+/**
+ * Don't use this in production. Useful for testing.
+ * We don't want to instantiate potentially many messages at once.
+ */
+- (NSArray<TSMessage *> *)fetchUnstartedExpiringMessagesInThread:(TSThread *)thread
+{
+    NSMutableArray<TSMessage *> *messages = [NSMutableArray new];
+    [self enumerateUnstartedExpiringMessagesInThread:thread block:^(TSMessage *_Nonnull message) {
+        [messages addObject:message];
+    }];
+
+    return [messages copy];
+}
+
+
 - (void)enumerateExpiredMessagesWithBlock:(void (^_Nonnull)(TSMessage *message))block
 {
     // Since we can't directly mutate the enumerated expired messages, we store only their ids in hopes of saving a
@@ -126,6 +175,7 @@ static NSString *const OWSDisappearingMessageFinderExpiresAtIndex = @"index_mess
 {
     YapDatabaseSecondaryIndexSetup *setup = [YapDatabaseSecondaryIndexSetup new];
     [setup addColumn:OWSDisappearingMessageFinderExpiresAtColumn withType:YapDatabaseSecondaryIndexTypeInteger];
+    [setup addColumn:OWSDisappearingMessageFinderThreadIdColumn withType:YapDatabaseSecondaryIndexTypeText];
 
     YapDatabaseSecondaryIndexHandler *handler =
         [YapDatabaseSecondaryIndexHandler withObjectBlock:^(YapDatabaseReadTransaction *transaction,
@@ -137,6 +187,7 @@ static NSString *const OWSDisappearingMessageFinderExpiresAtIndex = @"index_mess
                 TSMessage *message = (TSMessage *)object;
                 if (message.expiresInSeconds > 0) {
                     dict[OWSDisappearingMessageFinderExpiresAtColumn] = @(message.expiresAt);
+                    dict[OWSDisappearingMessageFinderThreadIdColumn] = message.uniqueThreadId;
                 } // else don't index non-expiring messages.
             }
         }];
