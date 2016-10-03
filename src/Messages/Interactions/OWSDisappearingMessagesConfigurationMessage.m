@@ -35,9 +35,10 @@ NS_ASSUME_NONNULL_BEGIN
     return self;
 }
 
-- (OWSSignalServiceProtosDataMessage *)buildDataMessage
+
+- (OWSSignalServiceProtosDataMessageBuilder *)dataMessageBuilder
 {
-    OWSSignalServiceProtosDataMessageBuilder *dataMessageBuilder = [OWSSignalServiceProtosDataMessageBuilder new];
+    OWSSignalServiceProtosDataMessageBuilder *dataMessageBuilder = [super dataMessageBuilder];
     [dataMessageBuilder setFlags:OWSSignalServiceProtosDataMessageFlagsExpirationTimerUpdate];
     if (self.configuration.isEnabled) {
         [dataMessageBuilder setExpireTimer:self.configuration.durationSeconds];
@@ -45,7 +46,7 @@ NS_ASSUME_NONNULL_BEGIN
         [dataMessageBuilder setExpireTimer:0];
     }
 
-    return [dataMessageBuilder build];
+    return dataMessageBuilder;
 }
 
 @end

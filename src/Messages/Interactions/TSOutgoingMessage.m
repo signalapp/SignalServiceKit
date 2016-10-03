@@ -62,14 +62,9 @@ NS_ASSUME_NONNULL_BEGIN
     return self.thread.contactIdentifier;
 }
 
-/**
- * This method handles a bunch of different interactions, and should probably be extracted into subclasses.
- * If you are considering modifying it to add new behavior, ask yourself if you could make a new subclass instead.
- */
-- (OWSSignalServiceProtosDataMessage *)buildDataMessage
+- (OWSSignalServiceProtosDataMessageBuilder *)dataMessageBuilder
 {
     TSThread *thread = self.thread;
-
     OWSSignalServiceProtosDataMessageBuilder *builder = [OWSSignalServiceProtosDataMessageBuilder new];
     [builder setBody:self.body];
     BOOL attachmentWasGroupAvatar = NO;
@@ -108,7 +103,12 @@ NS_ASSUME_NONNULL_BEGIN
         [builder setAttachmentsArray:attachments];
     }
     [builder setExpireTimer:self.expiresInSeconds];
-    return [builder build];
+    return builder;
+}
+
+- (OWSSignalServiceProtosDataMessage *)buildDataMessage
+{
+    return [[self dataMessageBuilder] build];
 }
 
 - (NSData *)buildPlainTextData
