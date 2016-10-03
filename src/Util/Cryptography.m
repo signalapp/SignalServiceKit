@@ -112,7 +112,7 @@
     size_t bufferSize = [dataToEncrypt length] + kCCBlockSizeAES128;
     void *buffer      = malloc(bufferSize);
     
-    if (buffer == nil) {
+    if (buffer == NULL) {
         DDLogError(@"Failed to allocate memory.");
         return nil;
     }
@@ -195,7 +195,7 @@
     size_t bufferSize = [dataToDecrypt length] + kCCBlockSizeAES128;
     void *buffer      = malloc(bufferSize);
     
-    if (buffer == nil) {
+    if (buffer == NULL) {
         DDLogError(@"Failed to allocate memory.");
         return nil;
     }
