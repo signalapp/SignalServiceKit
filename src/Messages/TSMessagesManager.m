@@ -491,20 +491,8 @@ NS_ASSUME_NONNULL_BEGIN
                                                        storageManager:self.storageManager];
         [readReceiptsProcessor process];
 
-        // Become eventually consistent in the case that the remote changed their settings at the same time.
-        // Also in case remote doesn't support expiring messages
-        OWSDisappearingMessagesConfiguration *disappearingMessagesConfiguration =
-            [OWSDisappearingMessagesConfiguration fetchObjectWithUniqueID:thread.uniqueId];
+        [self becomeConsistentWithDisappearingConfigurationForMessage:incomingMessage];
 
-        if (disappearingMessagesConfiguration.isEnabled && dataMessage.expireTimer == 0) {
-            NSString *contactName = [self.contactsManager nameStringForPhoneIdentifier:envelope.source];
-            disappearingMessagesConfiguration.enabled = NO;
-            [disappearingMessagesConfiguration save];
-            [[[OWSDisappearingConfigurationUpdateInfoMessage alloc] initWithTimestamp:envelope.timestamp
-                                                                               thread:thread
-                                                                        configuration:disappearingMessagesConfiguration
-                                                                  createdByRemoteName:contactName] save];
-        }
         // Update thread preview in inbox
         [thread touch];
 
@@ -517,6 +505,53 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     return incomingMessage;
+}
+
+- (void)becomeConsistentWithDisappearingConfigurationForMessage:(TSMessage *)message
+{
+    // Become eventually consistent in the case that the remote changed their settings at the same time.
+    // Also in case remote doesn't support expiring messages
+    OWSDisappearingMessagesConfiguration *disappearingMessagesConfiguration =
+        [OWSDisappearingMessagesConfiguration fetchObjectWithUniqueID:message.uniqueThreadId];
+
+    BOOL changed = NO;
+    if (message.expiresInSeconds == 0) {
+        if (disappearingMessagesConfiguration.isEnabled) {
+            changed = YES;
+            DDLogWarn(@"%@ Received remote message which had no expiration set, disabling our expiration to become "
+                      @"consistent.",
+                self.tag);
+            disappearingMessagesConfiguration.enabled = NO;
+            [disappearingMessagesConfiguration save];
+        }
+    } else if (message.expiresInSeconds != disappearingMessagesConfiguration.durationSeconds) {
+        changed = YES;
+        DDLogInfo(
+            @"%@ Received remote message with different expiration set, updating our expiration to become consistent.",
+            self.tag);
+        disappearingMessagesConfiguration.enabled = YES;
+        disappearingMessagesConfiguration.durationSeconds = message.expiresInSeconds;
+        [disappearingMessagesConfiguration save];
+    }
+
+    if (!changed) {
+        return;
+    }
+
+    if ([message isKindOfClass:[TSIncomingMessage class]]) {
+        TSIncomingMessage *incomingMessage = (TSIncomingMessage *)message;
+        NSString *contactName = [self.contactsManager nameStringForPhoneIdentifier:incomingMessage.authorId];
+
+        [[[OWSDisappearingConfigurationUpdateInfoMessage alloc] initWithTimestamp:message.timestamp
+                                                                           thread:message.thread
+                                                                    configuration:disappearingMessagesConfiguration
+                                                              createdByRemoteName:contactName] save];
+    } else {
+        [[[OWSDisappearingConfigurationUpdateInfoMessage alloc] initWithTimestamp:message.timestamp
+                                                                           thread:message.thread
+                                                                    configuration:disappearingMessagesConfiguration]
+            save];
+    }
 }
 
 - (void)processException:(NSException *)exception envelope:(OWSSignalServiceProtosEnvelope *)envelope

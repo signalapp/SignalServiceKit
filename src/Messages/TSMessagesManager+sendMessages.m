@@ -4,7 +4,6 @@
 #import "ContactsUpdater.h"
 #import "NSData+messagePadding.h"
 #import "NSDate+millisecondTimeStamp.h"
-#import "OWSDisappearingConfigurationUpdateInfoMessage.h"
 #import "OWSDisappearingMessagesConfiguration.h"
 #import "OWSDisappearingMessagesJob.h"
 #import "OWSLegacyMessageServiceParams.h"
@@ -387,21 +386,7 @@ dispatch_queue_t sendingQueue() {
 {
     [self saveMessage:message withState:TSOutgoingMessageStateDelivered];
 
-    // Become eventually consistent in the case that a sent transcript came frame a client that doesn't support
-    // expiration
-    OWSDisappearingMessagesConfiguration *disappearingMessagesConfiguration =
-        [OWSDisappearingMessagesConfiguration fetchObjectWithUniqueID:message.uniqueThreadId];
-
-    if (disappearingMessagesConfiguration.isEnabled && message.expiresInSeconds == 0) {
-        disappearingMessagesConfiguration.enabled = NO;
-        [disappearingMessagesConfiguration save];
-
-        [[[OWSDisappearingConfigurationUpdateInfoMessage alloc] initWithTimestamp:message.timestamp
-                                                                           thread:message.thread
-                                                                    configuration:disappearingMessagesConfiguration]
-            save];
-    }
-
+    [self becomeConsistentWithDisappearingConfigurationForMessage:message];
     [self.disappearingMessagesJob setExpirationForMessage:message expirationStartedAt:sentAt];
 }
 
@@ -415,9 +400,9 @@ dispatch_queue_t sendingQueue() {
             [[TSIncomingMessage alloc] initWithTimestamp:(outgoingMessage.timestamp + 1)
                                                 inThread:cThread
                                              messageBody:outgoingMessage.body
-                                           attachmentIds:outgoingMessage.attachmentIds];
+                                           attachmentIds:outgoingMessage.attachmentIds
+                                        expiresInSeconds:outgoingMessage.expiresInSeconds];
         [incomingMessage saveWithTransaction:transaction];
-        [self.disappearingMessagesJob setExpirationForMessage:incomingMessage];
     }];
     [self handleMessageSentLocally:outgoingMessage];
 }

@@ -55,6 +55,12 @@ NS_ASSUME_NONNULL_BEGIN
                                                                      expiresInSeconds:transcript.expirationDuration
                                                                       expireStartedAt:transcript.expirationStartedAt];
 
+    if (transcript.isExpirationTimerUpdate) {
+        [self.messagesManager becomeConsistentWithDisappearingConfigurationForMessage:outgoingMessage];
+        // early return to avoid saving an empty incoming message.
+        return;
+    }
+
     [self.messagesManager handleMessageSentRemotely:outgoingMessage sentAt:transcript.expirationStartedAt];
 
     [attachmentsProcessor fetchAttachmentsForMessageId:outgoingMessage.uniqueId];

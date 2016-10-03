@@ -31,7 +31,8 @@ NSString *const TSIncomingMessageWasReadOnThisDeviceNotification = @"TSIncomingM
         return self;
     }
 
-    _authorId = nil;
+    // _authorId was nil for contact thread messages prior to 2.6.0
+    _authorId = [thread contactIdentifier];
     _read = NO;
     _receivedAt = [NSDate date];
 

@@ -133,9 +133,10 @@ static NSString *const OWSDisappearingMessageFinderExpiresAtIndex = @"index_mess
 - (NSArray<TSMessage *> *)fetchUnstartedExpiringMessagesInThread:(TSThread *)thread
 {
     NSMutableArray<TSMessage *> *messages = [NSMutableArray new];
-    [self enumerateUnstartedExpiringMessagesInThread:thread block:^(TSMessage *_Nonnull message) {
-        [messages addObject:message];
-    }];
+    [self enumerateUnstartedExpiringMessagesInThread:thread
+                                               block:^(TSMessage *_Nonnull message) {
+                                                   [messages addObject:message];
+                                               }];
 
     return [messages copy];
 }
