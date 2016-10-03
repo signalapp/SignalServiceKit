@@ -17,7 +17,42 @@ NSString *const TSIncomingMessageWasReadOnThisDeviceNotification = @"TSIncomingM
                          inThread:(nullable TSContactThread *)thread
                       messageBody:(nullable NSString *)body
 {
-    return [super initWithTimestamp:timestamp inThread:thread messageBody:body attachmentIds:@[]];
+    self = [super initWithTimestamp:timestamp inThread:thread messageBody:body attachmentIds:@[]];
+
+    if (!self) {
+        return self;
+    }
+
+    // _authorId was nil for contact thread messages prior to 2.6.0
+    _authorId = [thread contactIdentifier];
+    _read = NO;
+    _receivedAt = [NSDate date];
+
+    return self;
+}
+
+- (instancetype)initWithTimestamp:(uint64_t)timestamp
+                         inThread:(nullable TSThread *)thread
+                      messageBody:(nullable NSString *)body
+                    attachmentIds:(NSArray<NSString *> *)attachmentIds
+                 expiresInSeconds:(uint32_t)expiresInSeconds
+{
+    self = [self initWithTimestamp:timestamp
+                          inThread:thread
+                       messageBody:body
+                     attachmentIds:attachmentIds
+                  expiresInSeconds:expiresInSeconds
+                   expireStartedAt:0];
+    if (!self) {
+        return self;
+    }
+
+    // _authorId was nil for contact thread messages prior to 2.6.0
+    _authorId = [thread contactIdentifier];
+    _read = NO;
+    _receivedAt = [NSDate date];
+
+    return self;
 }
 
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
