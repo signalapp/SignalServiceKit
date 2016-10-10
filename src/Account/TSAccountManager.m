@@ -46,6 +46,7 @@
 }
 
 + (void)didRegister {
+    DDLogInfo(@"%@ didRegister", self.tag);
     TSAccountManager *sharedManager = [self sharedInstance];
     __strong NSString *phoneNumber  = sharedManager.phoneNumberAwaitingVerification;
 
@@ -118,12 +119,14 @@
                         initWithPhoneNumber:phoneNumber
                                   transport:isSMS ? TSVerificationTransportSMS : TSVerificationTransportVoice]
         success:^(NSURLSessionDataTask *task, id responseObject) {
-          successBlock();
-          TSAccountManager *manager               = [self sharedInstance];
-          manager.phoneNumberAwaitingVerification = phoneNumber;
+            DDLogInfo(@"%@ Successfully requested verification code request.", self.tag);
+            TSAccountManager *manager = [self sharedInstance];
+            manager.phoneNumberAwaitingVerification = phoneNumber;
+            successBlock();
         }
         failure:^(NSURLSessionDataTask *task, NSError *error) {
-          failureBlock(error);
+            DDLogError(@"%@ Failed to request verification code request with error:%@", self.tag, error);
+            failureBlock(error);
         }];
 }
 
@@ -166,29 +169,33 @@
 
     [[TSNetworkManager sharedManager] makeRequest:request
         success:^(NSURLSessionDataTask *task, id responseObject) {
-          NSHTTPURLResponse *response = (NSHTTPURLResponse *)task.response;
-          long statuscode             = response.statusCode;
+            NSHTTPURLResponse *response = (NSHTTPURLResponse *)task.response;
+            long statuscode = response.statusCode;
 
-          if (statuscode == 200 || statuscode == 204) {
-              [TSStorageManager storeServerToken:authToken signalingKey:signalingKey];
+            if (statuscode == 200 || statuscode == 204) {
+                [TSStorageManager storeServerToken:authToken signalingKey:signalingKey];
 
-              [self registerForPushNotifications:pushToken
-                  voipToken:voipToken
-                  success:^{
-                    [self registerPreKeys:^{
-                      [TSSocketManager becomeActiveFromForeground];
-                      successBlock();
-                    }
-                                  failure:failureBlock];
-                  }
-                  failure:^(NSError *error) {
-                    failureBlock(error);
-                  }];
-          }
+                [self
+                    registerForPushNotifications:pushToken
+                                       voipToken:voipToken
+                                         success:^{
+                                             DDLogInfo(@"%@ Successfully registered for Push notifications", self.tag);
+
+                                             [self registerPreKeys:^{
+                                                 DDLogInfo(@"%@ Successfully registered prekeys", self.tag);
+                                                 [TSSocketManager becomeActiveFromForeground];
+                                                 successBlock();
+                                             }
+                                                           failure:failureBlock];
+                                         }
+                                         failure:failureBlock];
+            } else {
+                DDLogError(@"%@ Unexpected status while verifying code: %ld", self.tag, statuscode);
+            }
         }
         failure:^(NSURLSessionDataTask *task, NSError *error) {
-          DDLogError(@"Error registering with TextSecure: %@", error.debugDescription);
-          failureBlock(error);
+            DDLogError(@"%@ Error verifying code: %@", self.tag, error.debugDescription);
+            failureBlock(error);
         }];
 }
 
@@ -199,14 +206,16 @@
     [self registerForPushNotifications:pushToken
                              voipToken:voipToken
                                success:^{
-                                 [self registerPreKeys:successBlock failure:failureBlock];
+                                   DDLogInfo(@"%@ Successfully registered prekeys after push", self.tag);
+                                   [self registerPreKeys:successBlock failure:failureBlock];
                                }
                                failure:failureBlock];
 }
 
 + (void)registerPreKeys:(successCompletionBlock)successBlock failure:(failedBlock)failureBlock {
     [TSPreKeyManager registerPreKeysWithSuccess:^{
-      successBlock();
+        DDLogInfo(@"%@ Successfully registered prekeys", self.tag);
+        successBlock();
     }
                                         failure:failureBlock];
 }
@@ -231,21 +240,37 @@
 + (void)obtainRPRegistrationToken:(void (^)(NSString *rpRegistrationToken))success failure:(failedBlock)failureBlock {
     [[TSNetworkManager sharedManager] makeRequest:[[TSRedPhoneTokenRequest alloc] init]
         success:^(NSURLSessionDataTask *task, id responseObject) {
-          success([responseObject objectForKey:@"token"]);
+            DDLogInfo(@"%@ Successfully obtained Redphone token", self.tag);
+            success([responseObject objectForKey:@"token"]);
         }
         failure:^(NSURLSessionDataTask *task, NSError *error) {
-          failureBlock(error);
+            DDLogError(@"%@ Failed to obtain Redphone token with error: %@", self.tag, error);
+            failureBlock(error);
         }];
 }
 
 + (void)unregisterTextSecureWithSuccess:(successCompletionBlock)success failure:(failedBlock)failureBlock {
     [[TSNetworkManager sharedManager] makeRequest:[[TSUnregisterAccountRequest alloc] init]
         success:^(NSURLSessionDataTask *task, id responseObject) {
-          success();
+            DDLogInfo(@"%@ Successfully unregistered", self.tag);
+            success();
         }
         failure:^(NSURLSessionDataTask *task, NSError *error) {
-          failureBlock(error);
+            DDLogError(@"%@ Failed to unregister with error: %@", self.tag, error);
+            failureBlock(error);
         }];
+}
+
+#pragma mark - Logging
+
++ (NSString *)tag
+{
+    return [NSString stringWithFormat:@"[%@]", self.class];
+}
+
+- (NSString *)tag
+{
+    return self.class.tag;
 }
 
 @end
