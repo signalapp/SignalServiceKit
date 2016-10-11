@@ -24,7 +24,7 @@ retest:
 	cd $(WORKING_DIR) && \
 		$(XCODE_BUILD) \
 			-destination '${BUILD_DESTINATION}' \
-			test
+			build test
 
 clean:
 	cd $(WORKING_DIR) && \
