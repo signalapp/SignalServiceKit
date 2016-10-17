@@ -412,7 +412,7 @@ NS_ASSUME_NONNULL_BEGIN
                   }
               }
 
-              NSString *updateGroupInfo = [gThread.groupModel getInfoStringAboutUpdateTo:model withContactsManager:self.contactsManager];
+              NSString *updateGroupInfo = [gThread.groupModel getInfoStringAboutUpdateTo:model contactsManager:self.contactsManager];
               gThread.groupModel        = model;
               [gThread saveWithTransaction:transaction];
               [[[TSInfoMessage alloc] initWithTimestamp:timestamp

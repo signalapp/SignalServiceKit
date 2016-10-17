@@ -51,7 +51,7 @@
     return YES;
 }
 
-- (NSString *)getInfoStringAboutUpdateTo:(TSGroupModel *)newModel withContactsManager:(id<ContactsManagerProtocol>)contactsManager {
+- (NSString *)getInfoStringAboutUpdateTo:(TSGroupModel *)newModel contactsManager:(id<ContactsManagerProtocol>)contactsManager {
     NSString *updatedGroupInfoString = @"";
     if (self == newModel) {
         return NSLocalizedString(@"GROUP_UPDATED", @"");
@@ -86,7 +86,13 @@
         updatedGroupInfoString = [updatedGroupInfoString
             stringByAppendingString:[NSString
                                         stringWithFormat:NSLocalizedString(@"GROUP_MEMBER_LEFT", @""),
+                                                         [[membersWhoLeft allObjects] componentsJoinedByString:@", "]]];
+            stringByAppendingString:[NSString
+                                        stringWithFormat:NSLocalizedString(@"GROUP_MEMBER_LEFT", @""),
                                                          [oldMembersNames componentsJoinedByString:@", "]]];
+                                  stringByAppendingString:[NSString
+                                                           stringWithFormat:NSLocalizedString(@"GROUP_MEMBER_LEFT", @""),
+                                                           [oldMembersNames componentsJoinedByString:@", "]]];
     }
 
     if ([membersWhoJoined count] > 0) {
@@ -95,7 +101,12 @@
         }];
         updatedGroupInfoString = [updatedGroupInfoString
             stringByAppendingString:[NSString stringWithFormat:NSLocalizedString(@"GROUP_MEMBER_JOINED", @""),
+                                                               [[membersWhoJoined allObjects]
+                                                                   componentsJoinedByString:@", "]]];
+            stringByAppendingString:[NSString stringWithFormat:NSLocalizedString(@"GROUP_MEMBER_JOINED", @""),
                                                                [newMembersNames componentsJoinedByString:@", "]]];
+                                  stringByAppendingString:[NSString stringWithFormat:NSLocalizedString(@"GROUP_MEMBER_JOINED", @""),
+                                                           [newMembersNames componentsJoinedByString:@", "]]];
     }
 
     return updatedGroupInfoString;
