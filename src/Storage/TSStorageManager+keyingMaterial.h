@@ -35,10 +35,12 @@
  */
 - (NSString *)localNumber;
 + (NSString *)localNumber;
-- (void)runIfHasLocalNumber:(void (^)())block;
+
+- (void)runAsyncIfHasLocalNumber:(void (^)())block;
+- (void)runAsyncIfNoLocalNumber:(void (^)())block;
 
 + (void)storeServerToken:(NSString *)authToken signalingKey:(NSString *)signalingKey;
 
-+ (void)storePhoneNumber:(NSString *)phoneNumber;
+- (void)storePhoneNumber:(NSString *)phoneNumber;
 
 @end

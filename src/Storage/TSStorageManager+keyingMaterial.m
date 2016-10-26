@@ -20,13 +20,24 @@
     return [self stringForKey:TSStorageRegisteredNumberKey inCollection:TSStorageUserAccountCollection];
 }
 
-- (void)runIfHasLocalNumber:(void (^)())block
+- (void)runAsyncIfHasLocalNumber:(void (^)())block
 {
     [self.newDatabaseConnection asyncReadWithBlock:^(YapDatabaseReadTransaction *_Nonnull transaction) {
         if ([transaction objectForKey:TSStorageRegisteredNumberKey inCollection:TSStorageUserAccountCollection]) {
             block();
         } else {
-            DDLogDebug(@"%@ Skipping block since no local number is registered", self.logTag);
+            DDLogDebug(@"%@ Skipping existing user block since no local number is registered", self.logTag);
+        }
+    }];
+}
+
+- (void)runAsyncIfNoLocalNumber:(void (^)())block
+{
+    [self.newDatabaseConnection asyncReadWithBlock:^(YapDatabaseReadTransaction *_Nonnull transaction) {
+        if ([transaction objectForKey:TSStorageRegisteredNumberKey inCollection:TSStorageUserAccountCollection]) {
+            DDLogDebug(@"%@ Skipping new-user block since local number is already registered", self.logTag);
+        } else {
+            block();
         }
     }];
 }
@@ -39,13 +50,12 @@
     return [[self sharedManager] stringForKey:TSStorageServerAuthToken inCollection:TSStorageUserAccountCollection];
 }
 
-+ (void)storePhoneNumber:(NSString *)phoneNumber {
-    YapDatabaseConnection *dbConn = [[self sharedManager] dbConnection];
-
-    [dbConn readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-      [transaction setObject:phoneNumber
-                      forKey:TSStorageRegisteredNumberKey
-                inCollection:TSStorageUserAccountCollection];
+- (void)storePhoneNumber:(NSString *)phoneNumber
+{
+    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+        [transaction setObject:phoneNumber
+                        forKey:TSStorageRegisteredNumberKey
+                  inCollection:TSStorageUserAccountCollection];
     }];
 }
 

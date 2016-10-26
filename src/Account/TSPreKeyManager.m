@@ -16,7 +16,8 @@
 
 @implementation TSPreKeyManager
 
-+ (void)registerPreKeysWithSuccess:(successCompletionBlock)success failure:(failedBlock)failureBlock {
++ (void)registerPreKeysWithSuccess:(void (^)())success failure:(void (^)(NSError *))failureBlock
+{
     TSStorageManager *storageManager = [TSStorageManager sharedManager];
     ECKeyPair *identityKeyPair       = [storageManager identityKeyPair];
 
