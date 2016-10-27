@@ -193,13 +193,6 @@ NS_ASSUME_NONNULL_BEGIN
     [self registerWithPhoneNumber:number success:successBlock failure:failureBlock smsVerification:NO];
 }
 
-+ (void)verifyAccountWithCode:(NSString *)verificationCode
-                      success:(void (^)())successBlock
-                      failure:(void (^)(NSError *error))failureBlock
-{
-    return [[self sharedInstance] verifyAccountWithCode:verificationCode success:successBlock failure:failureBlock];
-}
-
 - (void)verifyAccountWithCode:(NSString *)verificationCode
                       success:(void (^)())successBlock
                       failure:(void (^)(NSError *error))failureBlock
@@ -226,9 +219,9 @@ NS_ASSUME_NONNULL_BEGIN
                 case 200:
                 case 204: {
                     [TSStorageManager storeServerToken:authToken signalingKey:signalingKey];
-                    [TSAccountManager didRegister];
+                    [self didRegister];
                     [TSSocketManager becomeActiveFromForeground];
-                    [self registerPreKeys:successBlock failure:failureBlock];
+                    [TSPreKeyManager registerPreKeysWithSuccess:successBlock failure:failureBlock];
                     break;
                 }
                 default: {
@@ -256,15 +249,6 @@ NS_ASSUME_NONNULL_BEGIN
                 }
             }
         }];
-}
-
-- (void)registerPreKeys:(void (^)())successHandler failure:(void (^)(NSError *error))failureHandler
-{
-    [TSPreKeyManager registerPreKeysWithSuccess:^{
-        DDLogInfo(@"%@ Successfully registered prekeys", self.tag);
-        successHandler();
-    }
-                                        failure:failureHandler];
 }
 
 #pragma mark Server keying material

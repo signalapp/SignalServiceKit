@@ -14,7 +14,13 @@ NS_ASSUME_NONNULL_BEGIN
 static NSString *const TSRegistrationErrorDomain             = @"TSRegistrationErrorDomain";
 static NSString *const TSRegistrationErrorUserInfoHTTPStatus = @"TSHTTPStatus";
 
+@class TSNetworkManager;
+@class TSStorageManager;
+
 @interface TSAccountManager : NSObject
+
+- (instancetype)initWithNetworkManager:(TSNetworkManager *)networkManager
+                        storageManager:(TSStorageManager *)storageManager;
 
 + (instancetype)sharedInstance;
 
@@ -35,8 +41,6 @@ static NSString *const TSRegistrationErrorUserInfoHTTPStatus = @"TSHTTPStatus";
  */
 + (nullable NSString *)localNumber;
 
-+ (void)didRegister;
-
 /**
  *  The registration ID is unique to an installation of TextSecure, it allows to know if the app was reinstalled
  *
@@ -56,7 +60,7 @@ static NSString *const TSRegistrationErrorUserInfoHTTPStatus = @"TSHTTPStatus";
 
 + (void)rerequestVoiceWithSuccess:(void (^)())successBlock failure:(void (^)(NSError *error))failureBlock;
 
-+ (void)verifyAccountWithCode:(NSString *)verificationCode
+- (void)verifyAccountWithCode:(NSString *)verificationCode
                       success:(void (^)())successBlock
                       failure:(void (^)(NSError *error))failureBlock;
 
@@ -69,8 +73,9 @@ static NSString *const TSRegistrationErrorUserInfoHTTPStatus = @"TSHTTPStatus";
  */
 - (void)registerForPushNotificationsWithPushToken:(NSString *)pushToken
                                         voipToken:(NSString *)voipToken
-                                          success:(void (^)())success
-                                          failure:(void (^)(NSError *error))failureBlock;
+                                          success:(void (^)())successHandler
+                                          failure:(void (^)(NSError *error))failureHandler
+    NS_SWIFT_NAME(registerForPushNotifications(pushToken:voipToken:success:failure:));
 
 - (void)obtainRPRegistrationTokenWithSuccess:(void (^)(NSString *rpRegistrationToken))success
                                      failure:(void (^)(NSError *error))failureBlock;
