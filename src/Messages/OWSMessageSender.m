@@ -289,8 +289,9 @@ NSString *const OWSMessageSenderInvalidDeviceException = @"InvalidDeviceExceptio
             }
 
             if (!recipient) {
-                NSError *error = OWSErrorMakeFailedToSendOutgoingMessageError();
                 DDLogWarn(@"recipient contact still not found after attempting lookup.");
+                [self unregisteredRecipient:recipient message:message thread:thread];
+                NSError *error = OWSErrorMakeNoSuchSignalRecipientError();
                 return failureHandler(error);
             }
 
