@@ -92,12 +92,17 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSString *)fullName {
     NSMutableString *fullName = [NSMutableString string];
-    if (self.firstName)
+    if (self.firstName) {
         [fullName appendString:self.firstName];
-    if (self.lastName) {
-        [fullName appendString:[NSString stringWithFormat:@" %@", self.lastName]];
     }
-    return fullName;
+    if (self.lastName) {
+        if (ABPersonGetCompositeNameFormat() == kABPersonCompositeNameFormatFirstNameFirst) {
+            [fullName appendString:[NSString stringWithFormat:@" %@", self.lastName]];
+        } else {
+            [fullName insertString:[NSString stringWithFormat:@"%@ ", self.lastName] atIndex:0];
+        }
+    }
+    return [fullName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
 - (NSString *)description {
