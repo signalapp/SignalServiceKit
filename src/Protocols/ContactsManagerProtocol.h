@@ -7,7 +7,7 @@
 
 @protocol ContactsManagerProtocol <NSObject>
 
-- (NSString *)nameStringForPhoneIdentifier:(NSString *)phoneNumber;
+- (NSString * _Nonnull)displayNameForPhoneIdentifier:(NSString *)phoneNumber;
 - (NSArray<Contact *> *)signalContacts;
 + (BOOL)name:(NSString *)nameString matchesQuery:(NSString *)queryString;
 
