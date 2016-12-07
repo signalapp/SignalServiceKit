@@ -151,9 +151,10 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 
 - (void)protectSignalFiles {
     [self protectFolderAtPath:[TSAttachmentStream attachmentsFolder]];
-    [self protectFolderAtPath:[self dbPath]];
-    [self protectFolderAtPath:[[self dbPath] stringByAppendingString:@"-shm"]];
-    [self protectFolderAtPath:[[self dbPath] stringByAppendingString:@"-wal"]];
+    NSString *dbPath = [self dbPath];
+    [self protectFolderAtPath:dbPath];
+    [self protectFolderAtPath:[dbPath stringByAppendingString:@"-shm"]];
+    [self protectFolderAtPath:[dbPath stringByAppendingString:@"-wal"]];
 }
 
 - (void)protectFolderAtPath:(NSString *)path {
