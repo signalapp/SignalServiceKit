@@ -8,6 +8,13 @@
 #import "TSStorageManager+databaseLocation.h"
 
 static const NSString *const databaseName = @"Signal.sqlite";
+#ifdef DEBUG
+static NSString *const preferredEntitlementName = @"Debug";
+#elif RELEASE
+static NSString *const preferredEntitlementName = @"Release";
+#endif
+
+static NSString *const appGroupSuffix = @"signal_service";
 
 @implementation TSStorageManager (databaseLocation)
 
@@ -18,8 +25,51 @@ static const NSString *const databaseName = @"Signal.sqlite";
     return [path stringByAppendingFormat:@"/%@", databaseName];
 }
 
+
++ (NSString *)getEntitlementFile {
+    NSBundle *mainBundle = [NSBundle mainBundle];
+
+    NSString *entitlementFile = [mainBundle pathForResource:preferredEntitlementName ofType:@"entitlements"];
+    if (!entitlementFile) {
+        NSURL *bundleURL = [mainBundle bundleURL];
+        NSString *name = [[bundleURL lastPathComponent] stringByDeletingPathExtension];
+        entitlementFile = [mainBundle pathForResource:name ofType:@"entitlements"];
+    }
+    return entitlementFile;
+}
+
++ (NSString *)determineAppGroupName {
+    NSString *pathToEntitlements = [TSStorageManager getEntitlementFile];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:pathToEntitlements];
+    NSArray *groups = [dict objectForKey:@"com.apple.security.application-groups"];
+
+    NSIndexSet *indexes = [groups indexesOfObjectsPassingTest:
+                           ^BOOL(id  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        return [obj hasSuffix:appGroupSuffix];
+    }];
+    if ([indexes count]) {
+        return [groups objectAtIndex:[indexes firstIndex]];
+    }
+    return nil;
+}
+
++ (NSString *)sharedDbPath:(NSFileManager *)fileManager {
+    NSString *appGroupName = [TSStorageManager determineAppGroupName];
+    NSURL *fileURL = [fileManager containerURLForSecurityApplicationGroupIdentifier:appGroupName];
+    if (fileURL) {
+        NSString *path = [fileURL path];
+
+        return [path stringByAppendingFormat:@"/%@", databaseName];
+    }
+    return nil;
+}
+
 + (NSString *)determineiOSDbPath:(NSFileManager *)fileManager {
-    return [self standaloneDbPath:fileManager];
+    NSString *path = [self sharedDbPath:fileManager];
+    if (!path) {
+        path = [self standaloneDbPath:fileManager];
+    }
+    return path;
 }
 
 + (NSString *)getDbPath {

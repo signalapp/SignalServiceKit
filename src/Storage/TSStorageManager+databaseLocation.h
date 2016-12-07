@@ -18,6 +18,14 @@
 + (NSString *)standaloneDbPath:(NSFileManager *)fileManager;
 
 /**
+ *  Full path of the signal database when used as part of an App Group
+ *
+ *  @return database path
+ */
+
++ (NSString *)sharedDbPath:(NSFileManager *)fileManager;
+
+/**
  *  Rely on the project configuration to return the appropriate database path
  *
  *  @return database path
