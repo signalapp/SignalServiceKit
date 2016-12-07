@@ -2,6 +2,7 @@
 //  Copyright (c) 2014 Open Whisper Systems. All rights reserved.
 
 #import "TSStorageManager.h"
+#import "TSStorageManager+databaseLocation.h"
 #import "NSData+Base64.h"
 #import "OWSDisappearingMessagesFinder.h"
 #import "OWSReadReceipt.h"
@@ -18,7 +19,6 @@
 
 NSString *const TSUIDatabaseConnectionDidUpdateNotification = @"TSUIDatabaseConnectionDidUpdateNotification";
 
-static const NSString *const databaseName = @"Signal.sqlite";
 static NSString *keychainService          = @"TSKeyChainService";
 static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 
@@ -194,28 +194,7 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 }
 
 - (NSString *)dbPath {
-    NSString *databasePath;
-
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-#if TARGET_OS_IPHONE
-    NSURL *fileURL = [[fileManager URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject];
-    NSString *path = [fileURL path];
-    databasePath   = [path stringByAppendingFormat:@"/%@", databaseName];
-#elif TARGET_OS_MAC
-
-    NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
-    NSArray *urlPaths  = [fileManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask];
-
-    NSURL *appDirectory = [[urlPaths objectAtIndex:0] URLByAppendingPathComponent:bundleID isDirectory:YES];
-
-    if (![fileManager fileExistsAtPath:[appDirectory path]]) {
-        [fileManager createDirectoryAtURL:appDirectory withIntermediateDirectories:NO attributes:nil error:nil];
-    }
-
-    databasePath = [appDirectory.filePathURL.absoluteString stringByAppendingFormat:@"/%@", databaseName];
-#endif
-
-    return databasePath;
+    return [TSStorageManager getDbPath];
 }
 
 - (BOOL)databasePasswordAccessible
