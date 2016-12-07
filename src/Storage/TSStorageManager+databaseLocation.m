@@ -6,6 +6,7 @@
 //
 
 #import "TSStorageManager+databaseLocation.h"
+//#import "TSPrefix.h"
 
 static const NSString *const databaseName = @"Signal.sqlite";
 #ifdef DEBUG
@@ -93,5 +94,27 @@ static NSString *const appGroupSuffix = @"signal_service";
 #endif
 
     return databasePath;
+}
+
++ (void) migrateStandaloneDb {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSFileManager *fileManager = [NSFileManager defaultManager];
+
+        NSString *standalonePath = [TSStorageManager standaloneDbPath:fileManager];
+        if ([fileManager fileExistsAtPath:standalonePath]) {
+            NSString *sharedPath = [TSStorageManager sharedDbPath:fileManager];
+
+            if (!sharedPath) {
+                NSError *error;
+                [fileManager moveItemAtPath:standalonePath toPath:sharedPath error:&error];
+                if(error) {
+                    DDLogError(@"Could not move signal database: %@", error.localizedDescription);
+                }
+            } else {
+                DDLogWarn(@"Signal database should not be migrated: No shared location");
+            }
+        }
+    });
 }
 @end

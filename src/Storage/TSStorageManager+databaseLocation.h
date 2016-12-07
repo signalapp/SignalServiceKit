@@ -35,4 +35,6 @@
 
 + (NSString *)getDbPath;
 
++ (void) migrateStandaloneDb;
+
 @end
