@@ -44,6 +44,9 @@
 		B6273DE11C13A2E500738558 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B6273DE01C13A2E500738558 /* Assets.xcassets */; };
 		B6273DE41C13A2E500738558 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = B6273DE21C13A2E500738558 /* LaunchScreen.storyboard */; };
 		D2AECE731DE8C3360068CE15 /* ContactSortingTest.m in Sources */ = {isa = PBXBuildFile; fileRef = D2AECE721DE8C3360068CE15 /* ContactSortingTest.m */; };
+		E99F3D091DF8731100801A1C /* Debug.entitlements in Resources */ = {isa = PBXBuildFile; fileRef = E99F3D081DF872ED00801A1C /* Debug.entitlements */; };
+		E99F3D0A1DF873D000801A1C /* TSKitiOSTestApp.entitlements in Resources */ = {isa = PBXBuildFile; fileRef = E9944E691DF8599600DB2657 /* TSKitiOSTestApp.entitlements */; };
+		E99F3D0E1DF8A63000801A1C /* TSStorageManagerMigrationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = E99F3D0D1DF8A63000801A1C /* TSStorageManagerMigrationTests.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -108,6 +111,9 @@
 		C0DC1A83C39CBC09FB2405A3 /* libPods-TSKitiOSTestAppTests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-TSKitiOSTestAppTests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2AECE721DE8C3360068CE15 /* ContactSortingTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = ContactSortingTest.m; path = ../../../tests/Contacts/ContactSortingTest.m; sourceTree = "<group>"; };
 		D3737F7A041D7147015C02C2 /* Pods-TSKitiOSTestAppTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TSKitiOSTestAppTests.release.xcconfig"; path = "Pods/Target Support Files/Pods-TSKitiOSTestAppTests/Pods-TSKitiOSTestAppTests.release.xcconfig"; sourceTree = "<group>"; };
+		E9944E691DF8599600DB2657 /* TSKitiOSTestApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TSKitiOSTestApp.entitlements; sourceTree = "<group>"; };
+		E99F3D081DF872ED00801A1C /* Debug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Debug.entitlements; sourceTree = "<group>"; };
+		E99F3D0D1DF8A63000801A1C /* TSStorageManagerMigrationTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TSStorageManagerMigrationTests.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -174,6 +180,7 @@
 			isa = PBXGroup;
 			children = (
 				45458B6E1CC342B600A02153 /* TSMessageStorageTests.m */,
+				E99F3D0D1DF8A63000801A1C /* TSStorageManagerMigrationTests.m */,
 				45458B6F1CC342B600A02153 /* TSStorageIdentityKeyStoreTests.m */,
 				45458B701CC342B600A02153 /* TSStoragePreKeyStoreTests.m */,
 				45458B711CC342B600A02153 /* TSStorageSignedPreKeyStore.m */,
@@ -288,6 +295,8 @@
 		B6273DD31C13A2E500738558 /* TSKitiOSTestApp */ = {
 			isa = PBXGroup;
 			children = (
+				E99F3D081DF872ED00801A1C /* Debug.entitlements */,
+				E9944E691DF8599600DB2657 /* TSKitiOSTestApp.entitlements */,
 				B6273DD71C13A2E500738558 /* AppDelegate.h */,
 				B6273DD81C13A2E500738558 /* AppDelegate.m */,
 				B6273DDA1C13A2E500738558 /* ViewController.h */,
@@ -383,6 +392,11 @@
 					B6273DD01C13A2E500738558 = {
 						CreatedOnToolsVersion = 7.1.1;
 						DevelopmentTeam = U68MSDN6DR;
+						SystemCapabilities = {
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+						};
 					};
 					B6273DE91C13A2E500738558 = {
 						CreatedOnToolsVersion = 7.1.1;
@@ -415,6 +429,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E99F3D0A1DF873D000801A1C /* TSKitiOSTestApp.entitlements in Resources */,
+				E99F3D091DF8731100801A1C /* Debug.entitlements in Resources */,
 				B6273DE41C13A2E500738558 /* LaunchScreen.storyboard in Resources */,
 				B6273DE11C13A2E500738558 /* Assets.xcassets in Resources */,
 				B6273DDF1C13A2E500738558 /* Main.storyboard in Resources */,
@@ -554,6 +570,7 @@
 				453E1FCF1DA8313100DDD7B7 /* OWSMessageSenderTest.m in Sources */,
 				459850C11D22C6F2006FFEDB /* PhoneNumberTest.m in Sources */,
 				45458B7A1CC342B600A02153 /* TSStorageSignedPreKeyStore.m in Sources */,
+				E99F3D0E1DF8A63000801A1C /* TSStorageManagerMigrationTests.m in Sources */,
 				453E1FDB1DA83EFB00DDD7B7 /* OWSFakeContactsUpdater.m in Sources */,
 				D2AECE731DE8C3360068CE15 /* ContactSortingTest.m in Sources */,
 				453E1FD81DA83E1000DDD7B7 /* OWSFakeContactsManager.m in Sources */,
@@ -688,6 +705,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				DEVELOPMENT_TEAM = U68MSDN6DR;
+				CODE_SIGN_ENTITLEMENTS = TSKitiOSTestApp/Debug.entitlements;
 				INFOPLIST_FILE = TSKitiOSTestApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = org.whispersystems.TSKitiOSTestApp;
@@ -701,6 +719,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				DEVELOPMENT_TEAM = U68MSDN6DR;
+				CODE_SIGN_ENTITLEMENTS = TSKitiOSTestApp/TSKitiOSTestApp.entitlements;
 				INFOPLIST_FILE = TSKitiOSTestApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = org.whispersystems.TSKitiOSTestApp;
