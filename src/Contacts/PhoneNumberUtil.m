@@ -1,7 +1,6 @@
 #import "Constraints.h"
 #import "FunctionalUtil.h"
 #import "PhoneNumberUtil.h"
-#import "TextSecureKitEnv.h"
 #import "Util.h"
 
 @implementation PhoneNumberUtil
@@ -39,6 +38,21 @@
     return [NSString stringWithFormat:@"%@%@", COUNTRY_CODE_PREFIX, callingCode];
 }
 
++ (BOOL)name:(NSString *)nameString matchesQuery:(NSString *)queryString {
+    NSCharacterSet *whitespaceSet = NSCharacterSet.whitespaceCharacterSet;
+    NSArray *queryStrings         = [queryString componentsSeparatedByCharactersInSet:whitespaceSet];
+    NSArray *nameStrings          = [nameString componentsSeparatedByCharactersInSet:whitespaceSet];
+
+    return [queryStrings all:^int(NSString *query) {
+        if (query.length == 0)
+            return YES;
+        return [nameStrings any:^int(NSString *nameWord) {
+            NSStringCompareOptions searchOpts = NSCaseInsensitiveSearch | NSAnchoredSearch;
+            return [nameWord rangeOfString:query options:searchOpts].location != NSNotFound;
+        }];
+    }];
+}
+
 // search term -> country codes
 + (NSArray *)countryCodesForSearchTerm:(NSString *)searchTerm {
     NSArray *countryCodes = NSLocale.ISOCountryCodes;
@@ -48,7 +62,7 @@
           NSString *countryName = [self countryNameFromCountryCode:code];
           NSString *callingCode = [self callingCodeFromCountryCode:code];
 
-          if ([[[TextSecureKitEnv sharedEnv].contactsManager class] name:countryName matchesQuery:searchTerm]) {
+          if ([self name:countryName matchesQuery:searchTerm]) {
               return YES;
           }
 
