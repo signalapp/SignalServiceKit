@@ -26,9 +26,11 @@ NSString *const OWSCensorshipConfigurationReflectorHost = @"signal-reflector-mee
     // Reports of censorship in:
     // Egypt
     // UAE
+    // Cuba
     // Oman
     return @[@"+20",
              @"+971",
+             @"+53",
              @"+968"];
 }
 
