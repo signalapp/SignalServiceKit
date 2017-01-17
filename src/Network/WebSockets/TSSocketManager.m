@@ -1,9 +1,5 @@
 //
-//  TSSocketManager.m
-//  TextSecureiOS
-//
-//  Created by Frederic Jacobs on 17/05/14.
-//  Copyright (c) 2014 Open Whisper Systems. All rights reserved.
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
 //
 
 #import "SubProtocol.pb.h"
@@ -39,10 +35,6 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 
 @property (nonatomic) UIBackgroundTaskIdentifier fetchingTaskIdentifier;
 
-@property BOOL didConnectBg;
-@property BOOL didRetreiveMessageBg;
-@property BOOL shouldDownloadMessage;
-
 @property (nonatomic, retain) NSTimer *backgroundKeepAliveTimer;
 @property (nonatomic, retain) NSTimer *backgroundConnectTimer;
 
@@ -71,9 +63,6 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     dispatch_once(&onceToken, ^{
       sharedMyManager                        = [[self alloc] init];
       sharedMyManager.fetchingTaskIdentifier = UIBackgroundTaskInvalid;
-      sharedMyManager.didConnectBg           = NO;
-      sharedMyManager.shouldDownloadMessage  = NO;
-      sharedMyManager.didRetreiveMessageBg   = NO;
     });
     return sharedMyManager;
 }
@@ -104,7 +93,8 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
                 DDLogVerbose(@"WebSocket is already connecting");
                 self.status = kSocketStatusConnecting;
                 return;
-            default:
+            case SR_CLOSED:
+            case SR_CLOSING:
                 break;
         }
     }
@@ -146,7 +136,6 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     self.status = kSocketStatusOpen;
     [self.reconnectTimer invalidate];
     self.reconnectTimer = nil;
-    self.didConnectBg   = YES;
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didFailWithError:(NSError *)error {
@@ -159,7 +148,6 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 
 - (void)webSocket:(SRWebSocket *)webSocket didReceiveMessage:(NSData *)data {
     WebSocketMessage *wsMessage = [WebSocketMessage parseFromData:data];
-    self.didRetreiveMessageBg   = YES;
 
     if (wsMessage.type == WebSocketMessageTypeRequest) {
         [self processWebSocketRequestMessage:wsMessage.request];
@@ -284,7 +272,8 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     [self becomeActive];
 }
 
-+ (void)becomeActiveFromBackgroundExpectMessage:(BOOL)expected {
++ (void)becomeActiveFromBackground
+{
     TSSocketManager *sharedInstance = [TSSocketManager sharedManager];
 
     if (sharedInstance.fetchingTaskIdentifier == UIBackgroundTaskInvalid) {
@@ -297,9 +286,6 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
         [loop addTimer:[TSSocketManager sharedManager].backgroundConnectTimer forMode:NSDefaultRunLoopMode];
 
         [sharedInstance.backgroundKeepAliveTimer invalidate];
-        sharedInstance.didConnectBg          = NO;
-        sharedInstance.didRetreiveMessageBg  = NO;
-        sharedInstance.shouldDownloadMessage = expected;
         sharedInstance.fetchingTaskIdentifier =
             [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
               [TSSocketManager resignActivity];
@@ -324,17 +310,6 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 - (void)closeBackgroundTask {
     [self.backgroundKeepAliveTimer invalidate];
     [self.backgroundConnectTimer invalidate];
-
-    /*
-     If VOIP Push worked, we should just have to check if message was retreived and if not, alert the user.
-     But we have to rely on the server for the fallback in failed cases since background push is unreliable.
-     https://devforums.apple.com/message/1135227
-
-     if ((self.shouldDownloadMessage && !self.didRetreiveMessageBg) || !self.didConnectBg) {
-     [self backgroundConnectTimedOut];
-     }
-
-     */
 
     [[UIApplication sharedApplication] endBackgroundTask:self.fetchingTaskIdentifier];
     self.fetchingTaskIdentifier = UIBackgroundTaskInvalid;
