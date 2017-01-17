@@ -274,37 +274,23 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 
 + (void)becomeActiveFromBackground
 {
-    TSSocketManager *sharedInstance = [TSSocketManager sharedManager];
+    [[TSSocketManager sharedManager] becomeActiveFromBackground];
+}
 
-    if (sharedInstance.fetchingTaskIdentifier == UIBackgroundTaskInvalid) {
-        sharedInstance.backgroundConnectTimer = [NSTimer timerWithTimeInterval:kBackgroundConnectTimer
-                                                                        target:sharedInstance
-                                                                      selector:@selector(backgroundConnectTimerExpired)
-                                                                      userInfo:nil
-                                                                       repeats:NO];
-        NSRunLoop *loop = [NSRunLoop mainRunLoop];
-        [loop addTimer:[TSSocketManager sharedManager].backgroundConnectTimer forMode:NSDefaultRunLoopMode];
-
-        [sharedInstance.backgroundKeepAliveTimer invalidate];
-        sharedInstance.fetchingTaskIdentifier =
-            [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
-              [TSSocketManager resignActivity];
-              [[TSSocketManager sharedManager] closeBackgroundTask];
-            }];
-
-        [self becomeActive];
-    } else {
+- (void)becomeActiveFromBackground
+{
+    if (self.fetchingTaskIdentifier != UIBackgroundTaskInvalid) {
         DDLogWarn(@"Got called to become active in the background but there was already a background task running.");
+        return;
     }
-}
 
-- (void)backgroundConnectTimerExpired {
-    [self backgroundTimeExpired];
-}
 
-- (void)backgroundTimeExpired {
-    [[self class] resignActivity];
-    [self closeBackgroundTask];
+    [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+        [self resignActivity];
+        [self closeBackgroundTask];
+    }];
+
+    [self becomeActive];
 }
 
 - (void)closeBackgroundTask {
