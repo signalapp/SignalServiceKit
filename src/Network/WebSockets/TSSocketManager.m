@@ -1,9 +1,5 @@
 //
-//  TSSocketManager.m
-//  TextSecureiOS
-//
-//  Created by Frederic Jacobs on 17/05/14.
-//  Copyright (c) 2014 Open Whisper Systems. All rights reserved.
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
 //
 
 #import "SubProtocol.pb.h"
@@ -30,11 +26,11 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 
 @property (nonatomic, readonly, strong) OWSSignalService *signalService;
 
-@property (nonatomic, retain) NSTimer *pingTimer;
-@property (nonatomic, retain) NSTimer *reconnectTimer;
+@property (nonatomic) NSTimer *pingTimer;
+@property (nonatomic) NSTimer *reconnectTimer;
 
 
-@property (nonatomic, retain) SRWebSocket *websocket;
+@property (nonatomic) SRWebSocket *websocket;
 @property (nonatomic) SocketStatus status;
 
 @property (nonatomic) UIBackgroundTaskIdentifier fetchingTaskIdentifier;
@@ -43,8 +39,8 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 @property BOOL didRetreiveMessageBg;
 @property BOOL shouldDownloadMessage;
 
-@property (nonatomic, retain) NSTimer *backgroundKeepAliveTimer;
-@property (nonatomic, retain) NSTimer *backgroundConnectTimer;
+@property (nonatomic) NSTimer *backgroundKeepAliveTimer;
+@property (nonatomic) NSTimer *backgroundConnectTimer;
 
 @end
 
@@ -59,7 +55,6 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     }
 
     _signalService = [OWSSignalService new];
-    _websocket = nil;
     [self addObserver:self forKeyPath:@"status" options:0 context:kSocketStatusObservationContext];
 
     return self;
@@ -110,9 +105,9 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     }
 
     // Discard the old socket which is already closed or is closing.
-    [socket close];
-    self.status = kSocketStatusClosed;
-    socket.delegate = nil;
+    [self closeWebSocket];
+
+    self.status = kSocketStatusConnecting;
 
     // Create a new web socket.
     NSString *webSocketConnect = [textSecureWebSocketAPI stringByAppendingString:[self webSocketAuthenticationString]];
@@ -127,8 +122,15 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 }
 
 + (void)resignActivity {
-    SRWebSocket *socket = [[self sharedManager] websocket];
-    [socket close];
+    [[self sharedManager] closeWebSocket];
+}
+
+- (void)closeWebSocket
+{
+    [self.websocket close];
+    self.websocket.delegate = nil;
+    self.websocket = nil;
+    self.status = kSocketStatusClosed;
 }
 
 #pragma mark - Delegate methods
