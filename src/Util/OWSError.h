@@ -15,6 +15,7 @@ typedef NS_ENUM(NSInteger, OWSErrorCode) {
     OWSErrorCodeFailedToSendOutgoingMessage = 30,
     OWSErrorCodeFailedToDecryptMessage = 100,
     OWSErrorCodeSignalServiceFailure = 1001,
+    OWSErrorCodeSingalServiceRateLimited = 1010,
     OWSErrorCodeUserError = 2001,
 };
 
@@ -22,5 +23,6 @@ extern NSError *OWSErrorWithCodeDescription(OWSErrorCode code, NSString *descrip
 extern NSError *OWSErrorMakeUnableToProcessServerResponseError();
 extern NSError *OWSErrorMakeFailedToSendOutgoingMessageError();
 extern NSError *OWSErrorMakeNoSuchSignalRecipientError();
+extern NSError *OWSErrorMakeAssertionError();
 
 NS_ASSUME_NONNULL_END

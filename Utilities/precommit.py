@@ -34,6 +34,7 @@ def process(filepath):
     original_text = text
     
     lines = text.split('\n')
+    lines = [line.rstrip() for line in lines]
     while lines and lines[0].startswith('//'):
         lines = lines[1:]
     text = '\n'.join(lines)

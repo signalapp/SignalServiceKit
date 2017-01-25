@@ -83,6 +83,7 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
             success:(void (^)())successHandler
             failure:(void (^)(NSError *error))failureHandler
 {
+    DDLogDebug(@"%@ sending message: %@", self.tag, message.debugDescription);
     void (^markAndFailureHandler)(NSError *error) = ^(NSError *error) {
         [self saveMessage:message withError:error];
         failureHandler(error);
@@ -434,7 +435,7 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
         }
 
         if ([exception.name isEqualToString:OWSMessageSenderRateLimitedException]) {
-            NSError *error = OWSErrorWithCodeDescription(OWSErrorCodeUntrustedIdentityKey,
+            NSError *error = OWSErrorWithCodeDescription(OWSErrorCodeSingalServiceRateLimited,
                 NSLocalizedString(@"FAILED_SENDING_BECAUSE_RATE_LIMIT",
                     @"action sheet header when re-sending message which failed because of too many attempts"));
             return failureHandler(error);
@@ -625,14 +626,11 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
 
     for (NSNumber *deviceNumber in recipient.devices) {
         @try {
-            // DEPRECATED - Remove after all clients have been upgraded.
-            BOOL isLegacyMessage = ![message isKindOfClass:[OWSOutgoingSyncMessage class]];
-
             NSDictionary *messageDict = [self encryptedMessageWithPlaintext:plainText
                                                                 toRecipient:recipient.uniqueId
                                                                    deviceId:deviceNumber
                                                               keyingStorage:[TSStorageManager sharedManager]
-                                                                     legacy:isLegacyMessage];
+                                                                     legacy:message.isLegacyMessage];
             if (messageDict) {
                 [messagesArray addObject:messageDict];
             } else {
