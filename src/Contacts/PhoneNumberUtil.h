@@ -6,6 +6,8 @@
 
 @property (nonatomic, retain) NBPhoneNumberUtil *nbPhoneNumberUtil;
 
++ (BOOL)name:(NSString *)nameString matchesQuery:(NSString *)queryString;
+
 + (NSString *)callingCodeFromCountryCode:(NSString *)code;
 + (NSString *)countryNameFromCountryCode:(NSString *)code;
 + (NSArray *)countryCodesForSearchTerm:(NSString *)searchTerm;
