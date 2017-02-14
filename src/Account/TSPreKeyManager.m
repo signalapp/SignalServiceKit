@@ -154,11 +154,18 @@ static NSDate *lastPreKeyCheckTimestamp = nil;
                         NSNumber *keyId = [responseObject objectForKey:keyIdDictKey];
                         OWSAssert(keyId);
                         TSStorageManager *storageManager = [TSStorageManager sharedManager];
-                        SignedPreKeyRecord *currentRecord = [storageManager loadSignedPrekey:keyId.intValue];
-                        OWSAssert(currentRecord);
 
-                        BOOL shouldUpdateSignedPrekey
-                            = fabs([currentRecord.generatedAt timeIntervalSinceNow]) >= kSignedPreKeysRotationTime;
+                        BOOL shouldUpdateSignedPrekey;
+                        if ([storageManager containsSignedPreKey:keyId.intValue]) {
+                            SignedPreKeyRecord *currentRecord = [storageManager loadSignedPrekey:keyId.intValue];
+                            OWSAssert(currentRecord);
+                            shouldUpdateSignedPrekey
+                                = fabs([currentRecord.generatedAt timeIntervalSinceNow]) >= kSignedPreKeysRotationTime;
+                        } else {
+                            DDLogError(@"%@ local signed prekey has no record of servers signed pre key", self.tag);
+                            shouldUpdateSignedPrekey = YES;
+                        }
+
                         if (shouldUpdateSignedPrekey) {
                             DDLogInfo(@"%@ Updating signed prekey due to rotation period.", self.tag);
                             updatePreKeys(RefreshPreKeysMode_SignedOnly);
