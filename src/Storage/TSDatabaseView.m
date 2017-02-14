@@ -264,15 +264,6 @@ NSString *TSSecondaryDevicesDatabaseViewExtensionName = @"TSSecondaryDevicesData
 
 + (NSDate *)localTimeReceiveDateForInteraction:(TSInteraction *)interaction {
     NSDate *interactionDate = interaction.date;
-
-    if ([interaction isKindOfClass:[TSIncomingMessage class]]) {
-        TSIncomingMessage *message = (TSIncomingMessage *)interaction;
-
-        if (message.receivedAt) {
-            interactionDate = message.receivedAt;
-        }
-    }
-
     return interactionDate;
 }
 
