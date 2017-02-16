@@ -1,6 +1,4 @@
-//
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
-//
+//  Copyright © 2016 Open Whisper Systems. All rights reserved.
 
 #import "OWSError.h"
 

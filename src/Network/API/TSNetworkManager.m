@@ -1,5 +1,9 @@
 //
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//  TSNetworkManager.m
+//  TextSecureiOS
+//
+//  Created by Frederic Jacobs on 9/27/13.
+//  Copyright (c) 2013 Open Whisper Systems. All rights reserved.
 //
 
 #import "TSNetworkManager.h"
@@ -10,7 +14,7 @@
 #import "TSVerifyCodeRequest.h"
 #import <AFNetworking/AFNetworking.h>
 
-NSString *const TSNetworkManagerDomain = @"org.whispersystems.signal.networkManager";
+#define TSNetworkManagerDomain @"org.whispersystems.signal.networkManager"
 
 @interface TSNetworkManager ()
 

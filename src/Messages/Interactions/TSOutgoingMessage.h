@@ -22,7 +22,7 @@ typedef NS_ENUM(NSInteger, TSOutgoingMessageState) {
 
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
                          inThread:(nullable TSThread *)thread
-                      messageBody:(nullable NSString *)body;
+                      messageBody:(nullable NSString *)body NS_SWIFT_NAME(init(timestamp:in:messageBody:));
 
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
                          inThread:(nullable TSThread *)thread

@@ -1,6 +1,5 @@
-//
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
-//
+//  Created by Frederic Jacobs on 27/10/14.
+//  Copyright (c) 2014 Open Whisper Systems. All rights reserved.
 
 #import "TSStorageManager.h"
 #import "NSData+Base64.h"
@@ -33,24 +32,18 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 
 @end
 
-#pragma mark -
-
 // Some lingering TSRecipient records in the wild causing crashes.
 // This is a stop gap until a proper cleanup happens.
 @interface TSRecipient : NSObject <NSCoding>
 
 @end
 
-#pragma mark -
-
 @interface OWSUnknownObject : NSObject <NSCoding>
 
 @end
 
-#pragma mark -
-
 /**
- * A default object to return when we can't deserialize an object from YapDB. This can prevent crashes when
+ * A default object to returned when we can't deserialize an object from YapDB. This can prevent crashes when
  * old objects linger after their definition file is removed. The danger is that, the objects can lay in wait
  * until the next time a DB extension is added and we necessarily enumerate the entire DB.
  */
@@ -68,13 +61,9 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 
 @end
 
-#pragma mark -
-
 @interface OWSUnarchiverDelegate : NSObject <NSKeyedUnarchiverDelegate>
 
 @end
-
-#pragma mark -
 
 @implementation OWSUnarchiverDelegate
 
@@ -85,8 +74,6 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 }
 
 @end
-
-#pragma mark -
 
 @implementation TSStorageManager
 

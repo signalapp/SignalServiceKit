@@ -1,6 +1,5 @@
-//
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
-//
+//  Created by Michael Kirk on 10/18/16.
+//  Copyright © 2016 Open Whisper Systems. All rights reserved.
 
 #import "OWSDispatch.h"
 

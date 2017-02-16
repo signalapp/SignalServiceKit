@@ -1,6 +1,5 @@
-//
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
-//
+//  Created by Michael Kirk on 10/7/16.
+//  Copyright © 2016 Open Whisper Systems. All rights reserved.
 
 #import "OWSMessageSender.h"
 #import "ContactsUpdater.h"

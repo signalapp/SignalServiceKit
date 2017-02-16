@@ -1,5 +1,7 @@
 //
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//  Asserts.h
+//
+//  Copyright (c) 2016 Open Whisper Systems. All rights reserved.
 //
 
 #import <Foundation/Foundation.h>

@@ -19,8 +19,6 @@ static NSString *const TSRegistrationErrorUserInfoHTTPStatus = @"TSHTTPStatus";
 
 @interface TSAccountManager : NSObject
 
-#pragma mark - Initializers
-
 - (instancetype)initWithNetworkManager:(TSNetworkManager *)networkManager
                         storageManager:(TSStorageManager *)storageManager;
 

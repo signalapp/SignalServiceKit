@@ -1,5 +1,9 @@
 //
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//  TextSecureKitEnv.m
+//  Pods
+//
+//  Created by Frederic Jacobs on 05/12/15.
+//
 //
 
 #import "TextSecureKitEnv.h"

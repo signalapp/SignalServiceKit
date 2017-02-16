@@ -1,6 +1,5 @@
-//
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
-//
+//  Created by Frederic Jacobs on 21/11/15.
+//  Copyright © 2015 Open Whisper Systems. All rights reserved.
 
 #import "SignalRecipient.h"
 
