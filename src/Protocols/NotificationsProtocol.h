@@ -1,17 +1,22 @@
+//
+//  NotificationsProtocol.h
+//  Pods
+//
 //  Created by Frederic Jacobs on 05/12/15.
-//  Copyright © 2015 Open Whisper Systems. All rights reserved.
+//
+//
+
+#import <Foundation/Foundation.h>
 
 @class TSErrorMessage;
 @class TSIncomingMessage;
 @class TSThread;
-@protocol ContactsManagerProtocol;
 
 @protocol NotificationsProtocol <NSObject>
 
 - (void)notifyUserForIncomingMessage:(TSIncomingMessage *)incomingMessage
                                 from:(NSString *)name
-                            inThread:(TSThread *)thread
-                     contactsManager:(id<ContactsManagerProtocol>)contactsManager;
+                            inThread:(TSThread *)thread;
 
 - (void)notifyUserForErrorMessage:(TSErrorMessage *)error inThread:(TSThread *)thread;
 

@@ -1,11 +1,11 @@
-//
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
-//
+//  Created by Michael Kirk on 10/7/16.
+//  Copyright © 2016 Open Whisper Systems. All rights reserved.
 
 #import "OWSMessageSender.h"
 #import "ContactsUpdater.h"
 #import "NSData+messagePadding.h"
 #import "OWSDisappearingMessagesJob.h"
+#import "OWSDispatch.h"
 #import "OWSError.h"
 #import "OWSLegacyMessageServiceParams.h"
 #import "OWSMessageServiceParams.h"
@@ -23,7 +23,6 @@
 #import "TSInvalidIdentityKeySendingErrorMessage.h"
 #import "TSNetworkManager.h"
 #import "TSOutgoingMessage.h"
-#import "TSPreKeyManager.h"
 #import "TSStorageManager+IdentityKeyStore.h"
 #import "TSStorageManager+PreKeyStore.h"
 #import "TSStorageManager+SignedPreKeyStore.h"
@@ -84,7 +83,6 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
             success:(void (^)())successHandler
             failure:(void (^)(NSError *error))failureHandler
 {
-    DDLogDebug(@"%@ sending message: %@", self.tag, message.debugDescription);
     void (^markAndFailureHandler)(NSError *error) = ^(NSError *error) {
         [self saveMessage:message withError:error];
         failureHandler(error);
@@ -261,23 +259,19 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
 
             [self groupSend:recipients message:message thread:gThread success:successHandler failure:failureHandler];
 
-        } else if ([thread isKindOfClass:[TSContactThread class]]
-            || [message isKindOfClass:[OWSOutgoingSyncMessage class]]) {
+        } else if ([thread isKindOfClass:[TSContactThread class]] || [message isKindOfClass:[OWSOutgoingSyncMessage class]]) {
 
             TSContactThread *contactThread = (TSContactThread *)thread;
 
             [self saveMessage:message withState:TSOutgoingMessageStateAttemptingOut];
 
-            if ([contactThread.contactIdentifier isEqualToString:self.storageManager.localNumber]
-                && ![message isKindOfClass:[OWSOutgoingSyncMessage class]]) {
+            if ([contactThread.contactIdentifier isEqualToString:self.storageManager.localNumber] && ![message isKindOfClass:[OWSOutgoingSyncMessage class]]) {
 
                 [self handleSendToMyself:message];
                 return;
             }
 
-            NSString *recipientContactId = [message isKindOfClass:[OWSOutgoingSyncMessage class]]
-                ? self.storageManager.localNumber
-                : contactThread.contactIdentifier;
+            NSString *recipientContactId = [message isKindOfClass:[OWSOutgoingSyncMessage class]] ? self.storageManager.localNumber : contactThread.contactIdentifier;
 
             SignalRecipient *recipient = [SignalRecipient recipientWithTextSecureIdentifier:recipientContactId];
             if (!recipient) {
@@ -286,12 +280,13 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
                 recipient = [self.contactsUpdater synchronousLookup:recipientContactId error:&error];
 
                 if (error) {
-                    if (error.code == OWSErrorCodeNoSuchSignalRecipient) {
-                        DDLogWarn(@"%@ recipient contact not found", self.tag);
+                    if (error.code == NOTFOUND_ERROR) {
+                        DDLogWarn(@"recipient contact not found with error: %@", error);
                         [self unregisteredRecipient:recipient message:message thread:thread];
+                        NSError *error = OWSErrorMakeNoSuchSignalRecipientError();
+                        return failureHandler(error);
                     }
-
-                    DDLogError(@"%@ contact lookup failed with error: %@", self.tag, error);
+                    DDLogError(@"contact lookup failed with error: %@", error);
                     return failureHandler(error);
                 }
             }
@@ -302,12 +297,7 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
                 return failureHandler(error);
             }
 
-            [self sendMessage:message
-                    recipient:recipient
-                       thread:thread
-                     attempts:OWSMessageSenderRetryAttempts
-                      success:successHandler
-                      failure:failureHandler];
+            [self sendMessage:message recipient:recipient thread:thread attempts:OWSMessageSenderRetryAttempts success:successHandler failure:failureHandler];
         } else {
             DDLogError(@"%@ Unexpected unhandlable message: %@", self.tag, message);
             NSError *error = OWSErrorMakeFailedToSendOutgoingMessageError();
@@ -403,35 +393,8 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
     }];
 }
 
-- (void)sendMessage:(TSOutgoingMessage *)message
-          recipient:(SignalRecipient *)recipient
-             thread:(TSThread *)thread
-           attempts:(int)remainingAttempts
-            success:(void (^)())successHandler
-            failure:(void (^)(NSError *error))failureHandler
+- (void)sendMessage:(TSOutgoingMessage *)message recipient:(SignalRecipient *)recipient thread:(TSThread *)thread attempts:(int)remainingAttempts success:(void (^)())successHandler failure:(void (^)(NSError *error))failureHandler
 {
-    DDLogDebug(@"%@ sending message to service: %@", self.tag, message.debugDescription);
-
-    if ([TSPreKeyManager isAppLockedDueToPreKeyUpdateFailures]) {
-        OWSAnalyticsError(@"Message send failed due to prekey update failures");
-
-        // Retry prekey update every time user tries to send a message while app
-        // is disabled due to prekey update failures.
-        //
-        // Only try to update the signed prekey; updating it is sufficient to
-        // re-enable message sending.
-        [TSPreKeyManager registerPreKeysWithMode:RefreshPreKeysMode_SignedOnly
-            success:^{
-                DDLogInfo(@"%@ New prekeys registered with server.", self.tag);
-            }
-            failure:^(NSError *error) {
-                DDLogWarn(@"%@ Failed to update prekeys with the server: %@", self.tag, error);
-            }];
-
-        DDLogError(@"%@ Message send failed due to repeated inability to update prekeys.", self.tag);
-        return failureHandler(OWSErrorMakeMessageSendDisabledDueToPreKeyUpdateFailuresError());
-    }
-
     if (remainingAttempts <= 0) {
         // We should always fail with a specific error.
         DDLogError(@"%@ Unexpected generic failure.", self.tag);
@@ -457,7 +420,7 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
         }
 
         if ([exception.name isEqualToString:OWSMessageSenderRateLimitedException]) {
-            NSError *error = OWSErrorWithCodeDescription(OWSErrorCodeSignalServiceRateLimited,
+            NSError *error = OWSErrorWithCodeDescription(OWSErrorCodeUntrustedIdentityKey,
                 NSLocalizedString(@"FAILED_SENDING_BECAUSE_RATE_LIMIT",
                     @"action sheet header when re-sending message which failed because of too many attempts"));
             return failureHandler(error);
@@ -486,9 +449,6 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
             });
         }
         failure:^(NSURLSessionDataTask *task, NSError *error) {
-            DDLogDebug(@"%@ failure sending to service: %@", self.tag, message.debugDescription);
-            [DDLog flushLog];
-
             NSHTTPURLResponse *response = (NSHTTPURLResponse *)task.response;
             long statuscode = response.statusCode;
             NSData *responseData = error.userInfo[AFNetworkingOperationFailingURLResponseDataErrorKey];
@@ -499,7 +459,6 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
                 }
 
                 dispatch_async([OWSDispatch sendingQueue], ^{
-                    DDLogDebug(@"%@ Retrying: %@", self.tag, message.debugDescription);
                     [self sendMessage:message
                             recipient:recipient
                                thread:thread
@@ -581,9 +540,6 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
 {
     [self saveMessage:message withState:TSOutgoingMessageStateSent];
     if (message.shouldSyncTranscript) {
-        // TODO: I suspect we shouldn't optimistically set hasSyncedTranscript.
-        //       We could set this in a success handler for [sendSyncTranscriptForMessage:].
-
         message.hasSyncedTranscript = YES;
         [self sendSyncTranscriptForMessage:message];
     }
@@ -655,26 +611,14 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
 
     for (NSNumber *deviceNumber in recipient.devices) {
         @try {
-            __block NSDictionary *messageDict;
-            __block NSException *encryptionException;
-            // Mutating session state is not thread safe, so we operate on a serial queue, shared with decryption
-            // operations.
-            dispatch_sync([OWSDispatch sessionCipher], ^{
-                @try {
-                    messageDict = [self encryptedMessageWithPlaintext:plainText
-                                                          toRecipient:recipient.uniqueId
-                                                             deviceId:deviceNumber
-                                                        keyingStorage:[TSStorageManager sharedManager]
-                                                               legacy:message.isLegacyMessage];
-                } @catch (NSException *exception) {
-                    encryptionException = exception;
-                }
-            });
-            if (encryptionException) {
-                DDLogInfo(@"%@ Exception during encryption: %@", self.tag, encryptionException);
-                @throw encryptionException;
-            }
+            // DEPRECATED - Remove after all clients have been upgraded.
+            BOOL isLegacyMessage = ![message isKindOfClass:[OWSOutgoingSyncMessage class]];
 
+            NSDictionary *messageDict = [self encryptedMessageWithPlaintext:plainText
+                                                                toRecipient:recipient.uniqueId
+                                                                   deviceId:deviceNumber
+                                                              keyingStorage:[TSStorageManager sharedManager]
+                                                                     legacy:isLegacyMessage];
             if (messageDict) {
                 [messagesArray addObject:messageDict];
             } else {
@@ -694,38 +638,33 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
     return [messagesArray copy];
 }
 
-- (NSDictionary *)encryptedMessageWithPlaintext:(NSData *)plainText
-                                    toRecipient:(NSString *)identifier
-                                       deviceId:(NSNumber *)deviceNumber
-                                  keyingStorage:(TSStorageManager *)storage
-                                         legacy:(BOOL)isLegacymessage
+- (NSDictionary *)encryptedMessageWithPlaintext:(NSData *)plainText toRecipient:(NSString *)identifier deviceId:(NSNumber *)deviceNumber keyingStorage:(TSStorageManager *)storage legacy:(BOOL)isLegacymessage
 {
     if (![storage containsSession:identifier deviceId:[deviceNumber intValue]]) {
         __block dispatch_semaphore_t sema = dispatch_semaphore_create(0);
         __block PreKeyBundle *bundle;
         __block NSException *exception;
-        [self.networkManager makeRequest:[[TSRecipientPrekeyRequest alloc] initWithRecipient:identifier
-                                                                                    deviceId:[deviceNumber stringValue]]
-            success:^(NSURLSessionDataTask *task, id responseObject) {
-                bundle = [PreKeyBundle preKeyBundleFromDictionary:responseObject forDeviceNumber:deviceNumber];
-                dispatch_semaphore_signal(sema);
+        TSRecipientPrekeyRequest *preKeyRequest = [[TSRecipientPrekeyRequest alloc] initWithRecipient:identifier deviceId:[deviceNumber stringValue]];
+
+        [self.networkManager makeRequest: preKeyRequest success:^(NSURLSessionDataTask *task, id responseObject) {
+
+            bundle = [PreKeyBundle preKeyBundleFromDictionary:responseObject forDeviceNumber:deviceNumber];
+            dispatch_semaphore_signal(sema);
+
+        } failure:^(NSURLSessionDataTask *task, NSError *error) {
+
+            DDLogError(@"Server replied on PreKeyBundle request with error: %@", error);
+            NSHTTPURLResponse *response = (NSHTTPURLResponse *)task.response;
+            if (response.statusCode == 404) {
+                // Can't throw exception from within callback as it's probabably a different thread.
+                exception = [NSException exceptionWithName:OWSMessageSenderInvalidDeviceException reason:@"Device not registered" userInfo:nil];
+            } else if (response.statusCode == 413) {
+                // Can't throw exception from within callback as it's probabably a different thread.
+                exception = [NSException exceptionWithName:OWSMessageSenderRateLimitedException reason:@"Too many prekey requests" userInfo:nil];
             }
-            failure:^(NSURLSessionDataTask *task, NSError *error) {
-                DDLogError(@"Server replied on PreKeyBundle request with error: %@", error);
-                NSHTTPURLResponse *response = (NSHTTPURLResponse *)task.response;
-                if (response.statusCode == 404) {
-                    // Can't throw exception from within callback as it's probabably a different thread.
-                    exception = [NSException exceptionWithName:OWSMessageSenderInvalidDeviceException
-                                                        reason:@"Device not registered"
-                                                      userInfo:nil];
-                } else if (response.statusCode == 413) {
-                    // Can't throw exception from within callback as it's probabably a different thread.
-                    exception = [NSException exceptionWithName:OWSMessageSenderRateLimitedException
-                                                        reason:@"Too many prekey requests"
-                                                      userInfo:nil];
-                }
-                dispatch_semaphore_signal(sema);
-            }];
+            dispatch_semaphore_signal(sema);
+        }];
+        
         dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
         if (exception) {
             @throw exception;
@@ -766,9 +705,11 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
                                                             recipientId:identifier
                                                                deviceId:[deviceNumber intValue]];
 
-    id<CipherMessage> encryptedMessage = [cipher encryptMessage:[plainText paddedMessageBody]];
-
-
+    // Mutating session state is not thread safe.
+    id<CipherMessage> encryptedMessage;
+    @synchronized (self) {
+        encryptedMessage = [cipher encryptMessage:[plainText paddedMessageBody]];
+    }
     NSData *serializedMessage = encryptedMessage.serialized;
     TSWhisperMessageType messageType = [self messageTypeForCipherMessage:encryptedMessage];
 

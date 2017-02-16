@@ -1,10 +1,9 @@
-//
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
-//
+//  Copyright © 2016 Open Whisper Systems. All rights reserved.
 
 #import "OWSAttachmentsProcessor.h"
 #import "Cryptography.h"
 #import "MIMETypeUtil.h"
+#import "OWSDispatch.h"
 #import "OWSError.h"
 #import "OWSSignalServiceProtos.pb.h"
 #import "TSAttachmentPointer.h"

@@ -1,5 +1,9 @@
 //
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//  PreKeyBundle+jsonDict.m
+//  Signal
+//
+//  Created by Frederic Jacobs on 26/11/14.
+//  Copyright (c) 2014 Open Whisper Systems. All rights reserved.
 //
 
 #import "NSData+Base64.h"
@@ -36,22 +40,15 @@
         int registrationId = [registrationIdString intValue];
         int deviceId       = [deviceIdString intValue];
 
-        NSDictionary *_Nullable preKeyDict;
-        id optionalPreKeyDict = [deviceDict objectForKey:@"preKey"];
-        // JSON parsing might give us NSNull, so we can't simply check for non-nil.
-        if ([optionalPreKeyDict isKindOfClass:[NSDictionary class]]) {
-            preKeyDict = (NSDictionary *)optionalPreKeyDict;
-        }
-
+        NSDictionary *preKey = [deviceDict objectForKey:@"preKey"];
         int prekeyId;
-        NSData *_Nullable preKeyPublic;
+        NSData *preKeyPublic = nil;
 
-        if (!preKeyDict) {
-            DDLogInfo(@"%@ No one-time prekey included in the bundle.", self.tag);
+        if (!preKey) {
             prekeyId = -1;
         } else {
-            prekeyId = [[preKeyDict objectForKey:@"keyId"] intValue];
-            NSString *preKeyPublicString = [preKeyDict objectForKey:@"publicKey"];
+            prekeyId                     = [[preKey objectForKey:@"keyId"] intValue];
+            NSString *preKeyPublicString = [preKey objectForKey:@"publicKey"];
             preKeyPublic                 = [NSData dataFromBase64StringNoPadding:preKeyPublicString];
         }
 
@@ -93,18 +90,6 @@
     }
 
     return bundle;
-}
-
-#pragma mark - Logging
-
-+ (NSString *)tag
-{
-    return [NSString stringWithFormat:@"[%@]", self.class];
-}
-
-- (NSString *)tag
-{
-    return self.class.tag;
 }
 
 @end

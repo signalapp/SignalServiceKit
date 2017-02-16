@@ -1,6 +1,5 @@
-//
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
-//
+// Created by Michael Kirk on 12/20/16.
+// Copyright © 2016 Open Whisper Systems. All rights reserved.
 
 #import "OWSCensorshipConfiguration.h"
 #import "TSStorageManager.h"
@@ -53,10 +52,16 @@ NSString *const OWSCensorshipConfigurationReflectorHost = @"signal-reflector-mee
     return @{
              // Egypt
              @"+20": @"google.com.eg",
+             // Cuba
+             @"+53": @"google.com.cu",
              // Oman
              @"+968": @"google.com.om",
              // UAE
              @"+971": @"google.ae",
+             // Iran
+             //
+             // There does not appear to be a specific Google domain for Iran.
+             @"+98": @"google.com",
              };
 }
 

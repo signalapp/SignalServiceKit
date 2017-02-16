@@ -22,7 +22,7 @@ typedef NS_ENUM(NSInteger, TSOutgoingMessageState) {
 
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
                          inThread:(nullable TSThread *)thread
-                      messageBody:(nullable NSString *)body;
+                      messageBody:(nullable NSString *)body NS_SWIFT_NAME(init(timestamp:in:messageBody:));
 
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
                          inThread:(nullable TSThread *)thread
@@ -48,13 +48,6 @@ typedef NS_ENUM(NSInteger, TSOutgoingMessageState) {
 @property BOOL hasSyncedTranscript;
 @property NSString *customMessage;
 @property (atomic, readonly) NSString *mostRecentFailureText;
-
-/**
- * Whether the message should be serialized as a modern aka Content, or the old style legacy message.
- * Sync and Call messsages must be sent as Content, but other old style DataMessage payloads should be
- * sent as legacy message until we're confident no significant number of legacy clients exist in the wild.
- */
-@property (nonatomic, readonly) BOOL isLegacyMessage;
 
 - (void)setSendingError:(NSError *)error;
 

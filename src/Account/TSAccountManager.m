@@ -1,5 +1,9 @@
 //
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//  TSAccountManagement.m
+//  TextSecureKit
+//
+//  Created by Frederic Jacobs on 27/10/14.
+//  Copyright (c) 2014 Open Whisper Systems. All rights reserved.
 //
 
 #import "TSAccountManager.h"
@@ -19,6 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface TSAccountManager ()
 
 @property (nullable, nonatomic, retain) NSString *phoneNumberAwaitingVerification;
+@property (nonatomic, strong, readonly) TSNetworkManager *networkManager;
 @property (nonatomic, strong, readonly) TSStorageManager *storageManager;
 
 @end
@@ -177,7 +182,6 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 - (void)verifyAccountWithCode:(NSString *)verificationCode
-              isWebRTCEnabled:(BOOL)isWebRTCEnabled
                       success:(void (^)())successBlock
                       failure:(void (^)(NSError *error))failureBlock
 {
@@ -192,8 +196,7 @@ NS_ASSUME_NONNULL_BEGIN
     TSVerifyCodeRequest *request = [[TSVerifyCodeRequest alloc] initWithVerificationCode:verificationCode
                                                                                forNumber:phoneNumber
                                                                             signalingKey:signalingKey
-                                                                                 authKey:authToken
-                                                                         isWebRTCEnabled:isWebRTCEnabled];
+                                                                                 authKey:authToken];
 
     [self.networkManager makeRequest:request
         success:^(NSURLSessionDataTask *task, id responseObject) {
@@ -206,9 +209,7 @@ NS_ASSUME_NONNULL_BEGIN
                     [TSStorageManager storeServerToken:authToken signalingKey:signalingKey];
                     [self didRegister];
                     [TSSocketManager becomeActiveFromForeground];
-                    [TSPreKeyManager registerPreKeysWithMode:RefreshPreKeysMode_SignedAndOneTime
-                                                     success:successBlock
-                                                     failure:failureBlock];
+                    [TSPreKeyManager registerPreKeysWithSuccess:successBlock failure:failureBlock];
                     break;
                 }
                 default: {

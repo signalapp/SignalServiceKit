@@ -1,9 +1,7 @@
-//
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
-//
+//  Created by Frederic Jacobs on 16/11/14.
+//  Copyright (c) 2014 Open Whisper Systems. All rights reserved.
 
 #import "TSThread.h"
-#import "OWSReadTracking.h"
 #import "TSDatabaseView.h"
 #import "TSIncomingMessage.h"
 #import "TSInteraction.h"
@@ -180,26 +178,26 @@ NS_ASSUME_NONNULL_BEGIN
     return hasUnread;
 }
 
-- (NSArray<id<OWSReadTracking> > *)unreadMessagesWithTransaction:(YapDatabaseReadTransaction *)transaction
+- (NSArray<TSIncomingMessage *> *)unreadMessagesWithTransaction:(YapDatabaseReadTransaction *)transaction
 {
-    NSMutableArray<id<OWSReadTracking> > *messages = [NSMutableArray new];
+    NSMutableArray<TSIncomingMessage *> *messages = [NSMutableArray new];
     [[transaction ext:TSUnreadDatabaseViewExtensionName]
         enumerateRowsInGroup:self.uniqueId
                   usingBlock:^(
                       NSString *collection, NSString *key, id object, id metadata, NSUInteger index, BOOL *stop) {
 
-                      if (![object conformsToProtocol:@protocol(OWSReadTracking)]) {
+                      if (![object isKindOfClass:[TSIncomingMessage class]]) {
                           DDLogError(@"%@ Unexpected object in unread messages: %@", self.tag, object);
                       }
-                      [messages addObject:(id<OWSReadTracking>)object];
+                      [messages addObject:(TSIncomingMessage *)object];
                   }];
 
     return [messages copy];
 }
 
-- (NSArray<id<OWSReadTracking> > *)unreadMessages
+- (NSArray<TSIncomingMessage *> *)unreadMessages
 {
-    __block NSArray<id<OWSReadTracking> > *messages;
+    __block NSArray<TSIncomingMessage *> *messages;
     [self.dbConnection readWithBlock:^(YapDatabaseReadTransaction *_Nonnull transaction) {
         messages = [self unreadMessagesWithTransaction:transaction];
     }];
@@ -209,14 +207,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)markAllAsReadWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
 {
-    for (id<OWSReadTracking> message in [self unreadMessagesWithTransaction:transaction]) {
+    for (TSIncomingMessage *message in [self unreadMessagesWithTransaction:transaction]) {
         [message markAsReadLocallyWithTransaction:transaction];
     }
 }
 
 - (void)markAllAsRead
 {
-    for (id<OWSReadTracking> message in [self unreadMessages]) {
+    for (TSIncomingMessage *message in [self unreadMessages]) {
         [message markAsReadLocally];
     }
 }

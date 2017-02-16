@@ -1,5 +1,9 @@
 //
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//  TSNetworkManager.m
+//  TextSecureiOS
+//
+//  Created by Frederic Jacobs on 9/27/13.
+//  Copyright (c) 2013 Open Whisper Systems. All rights reserved.
 //
 
 #import "TSNetworkManager.h"
@@ -10,7 +14,7 @@
 #import "TSVerifyCodeRequest.h"
 #import <AFNetworking/AFNetworking.h>
 
-NSString *const TSNetworkManagerDomain = @"org.whispersystems.signal.networkManager";
+#define TSNetworkManagerDomain @"org.whispersystems.signal.networkManager"
 
 @interface TSNetworkManager ()
 
@@ -54,23 +58,19 @@ typedef void (^failureBlock)(NSURLSessionDataTask *task, NSError *error);
 {
     DDLogInfo(@"%@ Making request: %@", self.tag, request);
 
-    void (^failure)(NSURLSessionDataTask *task, NSError *error) =
-        [TSNetworkManager errorPrettifyingForFailureBlock:failureBlock];
+    void (^failure)(NSURLSessionDataTask *task, NSError *error) = [TSNetworkManager errorPrettifyingForFailureBlock:failureBlock];
 
     AFHTTPSessionManager *sessionManager = self.signalService.HTTPSessionManager;
 
     if ([request isKindOfClass:[TSVerifyCodeRequest class]]) {
         // We plant the Authorization parameter ourselves, no need to double add.
-        [sessionManager.requestSerializer
-            setAuthorizationHeaderFieldWithUsername:((TSVerifyCodeRequest *)request).numberToValidate
-                                           password:[request.parameters objectForKey:@"AuthKey"]];
+        [sessionManager.requestSerializer setAuthorizationHeaderFieldWithUsername:((TSVerifyCodeRequest *)request).numberToValidate password:[request.parameters objectForKey:@"AuthKey"]];
         [request.parameters removeObjectForKey:@"AuthKey"];
         [sessionManager PUT:request.URL.absoluteString parameters:request.parameters success:success failure:failure];
+
     } else {
         if (![request isKindOfClass:[TSRequestVerificationCodeRequest class]]) {
-            [sessionManager.requestSerializer
-                setAuthorizationHeaderFieldWithUsername:[TSAccountManager localNumber]
-                                               password:[TSStorageManager serverAuthToken]];
+            [sessionManager.requestSerializer setAuthorizationHeaderFieldWithUsername:[TSAccountManager localNumber] password:[TSStorageManager serverAuthToken]];
         }
 
         if ([request.HTTPMethod isEqualToString:@"GET"]) {
