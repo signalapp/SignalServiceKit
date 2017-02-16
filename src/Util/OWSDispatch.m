@@ -18,16 +18,6 @@ NS_ASSUME_NONNULL_BEGIN
     return queue;
 }
 
-+ (dispatch_queue_t)sessionCipher
-{
-    static dispatch_once_t onceToken;
-    static dispatch_queue_t queue;
-    dispatch_once(&onceToken, ^{
-        queue = dispatch_queue_create("org.whispersystems.signal.sessionCipher", NULL);
-    });
-    return queue;
-}
-
 + (dispatch_queue_t)sendingQueue
 {
     static dispatch_once_t onceToken;
@@ -39,9 +29,5 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 @end
-
-void AssertIsOnMainThread() {
-    OWSCAssert([NSThread isMainThread]);
-}
 
 NS_ASSUME_NONNULL_END

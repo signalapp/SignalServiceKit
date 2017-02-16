@@ -7,7 +7,6 @@
 #import <YapDatabase/YapDatabaseView.h>
 
 #import "OWSDevice.h"
-#import "OWSReadTracking.h"
 #import "TSIncomingMessage.h"
 #import "TSStorageManager.h"
 #import "TSThread.h"
@@ -32,16 +31,17 @@ NSString *TSSecondaryDevicesDatabaseViewExtensionName = @"TSSecondaryDevicesData
         return YES;
     }
 
-    YapDatabaseViewGrouping *viewGrouping = [YapDatabaseViewGrouping withObjectBlock:^NSString *(
-        YapDatabaseReadTransaction *transaction, NSString *collection, NSString *key, id object) {
-        if ([object conformsToProtocol:@protocol(OWSReadTracking)]) {
-            id<OWSReadTracking> possiblyRead = (id<OWSReadTracking>)object;
-            if (possiblyRead.read == NO) {
-                return possiblyRead.uniqueThreadId;
-            }
-        }
-        return nil;
-    }];
+    YapDatabaseViewGrouping *viewGrouping = [YapDatabaseViewGrouping
+        withObjectBlock:^NSString *(
+            YapDatabaseReadTransaction *transaction, NSString *collection, NSString *key, id object) {
+          if ([object isKindOfClass:[TSIncomingMessage class]]) {
+              TSIncomingMessage *message = (TSIncomingMessage *)object;
+              if (message.read == NO) {
+                  return message.uniqueThreadId;
+              }
+          }
+          return nil;
+        }];
 
     YapDatabaseViewSorting *viewSorting = [self messagesSorting];
 

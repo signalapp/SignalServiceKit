@@ -7,7 +7,6 @@
 //
 
 #import "TSErrorMessage.h"
-#import "NotificationsProtocol.h"
 #import "TSContactThread.h"
 #import "TSErrorMessage_privateConstructor.h"
 #import "TSMessagesManager.h"
@@ -36,7 +35,7 @@
     }
 
     _errorType = errorMessageType;
-    // TODO Move this out of model class.
+
     [[TextSecureKitEnv sharedEnv].notificationsManager notifyUserForErrorMessage:self inThread:thread];
 
     return self;

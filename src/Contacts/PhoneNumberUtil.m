@@ -1,10 +1,6 @@
-//
-//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
-//
-
-#import "PhoneNumberUtil.h"
-#import "ContactsManagerProtocol.h"
+#import "Constraints.h"
 #import "FunctionalUtil.h"
+#import "PhoneNumberUtil.h"
 #import "TextSecureKitEnv.h"
 #import "Util.h"
 

@@ -58,12 +58,6 @@
     return [TSThread fetchObjectWithUniqueID:self.uniqueThreadId];
 }
 
-- (void)touchThreadWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
-{
-    TSThread *thread = [TSThread fetchObjectWithUniqueID:self.uniqueThreadId transaction:transaction];
-    [thread touchWithTransaction:transaction];
-}
-
 #pragma mark Date operations
 
 - (uint64_t)millisecondsTimestamp {

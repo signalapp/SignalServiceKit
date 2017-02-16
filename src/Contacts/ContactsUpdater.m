@@ -36,8 +36,12 @@ NS_ASSUME_NONNULL_BEGIN
     // retained until our error parameter can take ownership.
     __block NSError *retainedError;
     [self lookupIdentifier:identifier
-        success:^(SignalRecipient *fetchedRecipient) {
-            recipient = fetchedRecipient;
+        success:^(NSSet<NSString *> *matchedIds) {
+            if (matchedIds.count == 1) {
+                recipient = [SignalRecipient recipientWithTextSecureIdentifier:identifier];
+            } else {
+                retainedError = [NSError errorWithDomain:@"contactsmanager.notfound" code:NOTFOUND_ERROR userInfo:nil];
+            }
             dispatch_semaphore_signal(sema);
         }
         failure:^(NSError *lookupError) {
@@ -50,26 +54,17 @@ NS_ASSUME_NONNULL_BEGIN
     return recipient;
 }
 
+
 - (void)lookupIdentifier:(NSString *)identifier
-                 success:(void (^)(SignalRecipient *recipient))success
+                 success:(void (^)(NSSet<NSString *> *matchedIds))success
                  failure:(void (^)(NSError *error))failure
 {
-    // This should never happen according to nullability annotations... but IIRC it does. =/
     if (!identifier) {
-        OWSAssert(NO);
         failure(OWSErrorWithCodeDescription(OWSErrorCodeInvalidMethodParameters, @"Cannot lookup nil identifier"));
         return;
     }
 
-    [self contactIntersectionWithSet:[NSSet setWithObject:identifier]
-                             success:^(NSSet<NSString *> *_Nonnull matchedIds) {
-                                 if (matchedIds.count == 1) {
-                                     success([SignalRecipient recipientWithTextSecureIdentifier:identifier]);
-                                 } else {
-                                     failure(OWSErrorMakeNoSuchSignalRecipientError());
-                                 }
-                             }
-                             failure:failure];
+    [self contactIntersectionWithSet:[NSSet setWithObject:identifier] success:success failure:failure];
 }
 
 - (void)updateSignalContactIntersectionWithABContacts:(NSArray<Contact *> *)abContacts
@@ -118,16 +113,19 @@ NS_ASSUME_NONNULL_BEGIN
                            success:(void (^)(NSSet<NSString *> *matchedIds))success
                            failure:(void (^)(NSError *error))failure {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-      NSMutableDictionary *phoneNumbersByHashes = [NSMutableDictionary dictionary];
-      for (NSString *identifier in idSet) {
-          [phoneNumbersByHashes setObject:identifier
-                                   forKey:[Cryptography truncatedSHA1Base64EncodedWithoutPadding:identifier]];
-      }
-      NSArray *hashes = [phoneNumbersByHashes allKeys];
 
-      TSRequest *request = [[TSContactsIntersectionRequest alloc] initWithHashesArray:hashes];
-      [[TSNetworkManager sharedManager] makeRequest:request
-          success:^(NSURLSessionDataTask *tsTask, id responseDict) {
+        NSMutableDictionary *phoneNumbersByHashes = [NSMutableDictionary dictionary];
+
+        for (NSString *identifier in idSet) {
+            [phoneNumbersByHashes setObject:identifier forKey:[Cryptography truncatedSHA1Base64EncodedWithoutPadding:identifier]];
+        }
+
+        NSArray *hashes = [phoneNumbersByHashes allKeys];
+
+        TSRequest *request = [[TSContactsIntersectionRequest alloc] initWithHashesArray:hashes];
+
+        [[TSNetworkManager sharedManager] makeRequest:request success:^(NSURLSessionDataTask *tsTask, id responseDict) {
+
             NSMutableDictionary *attributesForIdentifier = [NSMutableDictionary dictionary];
             NSArray *contactsArray                       = [(NSDictionary *)responseDict objectForKey:@"contacts"];
 
@@ -147,34 +145,40 @@ NS_ASSUME_NONNULL_BEGIN
             }
 
             // Insert or update contact attributes
-            [[TSStorageManager sharedManager]
-                    .dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-              for (NSString *identifier in attributesForIdentifier) {
-                  SignalRecipient *recipient =
-                      [SignalRecipient recipientWithTextSecureIdentifier:identifier withTransaction:transaction];
-                  if (!recipient) {
-                      recipient = [[SignalRecipient alloc] initWithTextSecureIdentifier:identifier
-                                                                                  relay:nil
-                                                                          supportsVoice:NO
-                                                                         supportsWebRTC:NO];
-                  }
+            [[TSStorageManager sharedManager].dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
 
-                  NSDictionary *attributes = [attributesForIdentifier objectForKey:identifier];
+                for (NSString *identifier in attributesForIdentifier) {
+                    SignalRecipient *recipient =
+                    [SignalRecipient recipientWithTextSecureIdentifier:identifier withTransaction:transaction];
+                    if (!recipient) {
+                        recipient =
+                        [[SignalRecipient alloc] initWithTextSecureIdentifier:identifier relay:nil supportsVoice:NO];
+                    }
 
-                  recipient.relay = attributes[@"relay"];
-                  recipient.supportsVoice = [attributes[@"voice"] boolValue];
-                  // The key for the "supports WebRTC audio/video" property is "video".
-                  recipient.supportsWebRTC = [attributes[@"video"] boolValue];
+                    NSDictionary *attributes = [attributesForIdentifier objectForKey:identifier];
 
-                  [recipient saveWithTransaction:transaction];
-              }
+                    NSString *relay = [attributes objectForKey:@"relay"];
+                    if (relay) {
+                        recipient.relay = relay;
+                    } else {
+                        recipient.relay = nil;
+                    }
+
+                    BOOL supportsVoice = [[attributes objectForKey:@"voice"] boolValue];
+                    if (supportsVoice) {
+                        recipient.supportsVoice = YES;
+                    } else {
+                        recipient.supportsVoice = NO;
+                    }
+
+                    [recipient saveWithTransaction:transaction];
+                }
             }];
-
+            
             success([NSSet setWithArray:attributesForIdentifier.allKeys]);
-          }
-          failure:^(NSURLSessionDataTask *task, NSError *error) {
+        } failure:^(NSURLSessionDataTask *task, NSError *error) {
             failure(error);
-          }];
+        }];
     });
 }
 

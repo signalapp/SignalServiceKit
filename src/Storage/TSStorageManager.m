@@ -4,9 +4,7 @@
 
 #import "TSStorageManager.h"
 #import "NSData+Base64.h"
-#import "OWSAnalytics.h"
 #import "OWSDisappearingMessagesFinder.h"
-#import "OWSFailedMessagesJob.h"
 #import "OWSReadReceipt.h"
 #import "SignalRecipient.h"
 #import "TSAttachmentStream.h"
@@ -22,8 +20,6 @@
 NSString *const TSUIDatabaseConnectionDidUpdateNotification = @"TSUIDatabaseConnectionDidUpdateNotification";
 
 NSString *const TSStorageManagerExceptionNameDatabasePasswordInaccessible = @"TSStorageManagerExceptionNameDatabasePasswordInaccessible";
-NSString *const TSStorageManagerExceptionNameDatabasePasswordInaccessibleWhileBackgrounded =
-    @"TSStorageManagerExceptionNameDatabasePasswordInaccessibleWhileBackgrounded";
 NSString *const TSStorageManagerExceptionNameDatabasePasswordUnwritable = @"TSStorageManagerExceptionNameDatabasePasswordUnwritable";
 NSString *const TSStorageManagerExceptionNameNoDatabase = @"TSStorageManagerExceptionNameNoDatabase";
 
@@ -110,40 +106,10 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 {
     self = [super init];
 
-    if (![self tryToLoadDatabase]) {
-        // Failing to load the database is catastrophic.
-        //
-        // The best we can try to do is to discard the current database
-        // and behave like a clean install.
-
-        OWSAnalyticsCritical(@"Could not load database");
-
-        // Try to reset app by deleting database.
-        // Disabled resetting storage until we have better data on why this happens.
-        // [self resetSignalStorage];
-
-        if (![self tryToLoadDatabase]) {
-            OWSAnalyticsCritical(@"Could not load database (second attempt)");
-
-            [NSException raise:TSStorageManagerExceptionNameNoDatabase format:@"Failed to initialize database."];
-        }
-    }
-
-    return self;
-}
-
-- (BOOL)tryToLoadDatabase
-{
-
-    // We determine the database password first, since a side effect of
-    // this can be deleting any existing database file (if we're recovering
-    // from a corrupt keychain).
-    NSData *databasePassword = [self databasePassword];
-
     YapDatabaseOptions *options = [[YapDatabaseOptions alloc] init];
     options.corruptAction       = YapDatabaseCorruptAction_Fail;
-    options.cipherKeyBlock = ^{
-        return databasePassword;
+    options.cipherKeyBlock      = ^{
+      return [self databasePassword];
     };
 
     _database = [[YapDatabase alloc] initWithPath:[self dbPath]
@@ -151,11 +117,12 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
                                      deserializer:[[self class] logOnFailureDeserializer]
                                           options:options];
     if (!_database) {
-        return NO;
+        DDLogError(@"%@ Failed to initialize database.", self.tag);
+        [NSException raise:TSStorageManagerExceptionNameNoDatabase format:@"Failed to initialize database."];
     }
     _dbConnection = self.newDatabaseConnection;
 
-    return YES;
+    return self;
 }
 
 /**
@@ -201,8 +168,6 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
     [OWSReadReceipt asyncRegisterIndexOnSenderIdAndTimestampWithDatabase:self.database];
     OWSDisappearingMessagesFinder *finder = [[OWSDisappearingMessagesFinder alloc] initWithStorageManager:self];
     [finder asyncRegisterDatabaseExtensions];
-    OWSFailedMessagesJob *failedMessagesJob = [[OWSFailedMessagesJob alloc] initWithStorageManager:self];
-    [failedMessagesJob asyncRegisterDatabaseExtensions];
 }
 
 - (void)protectSignalFiles {
@@ -274,7 +239,7 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
     return databasePath;
 }
 
-+ (BOOL)isDatabasePasswordAccessible
+- (BOOL)databasePasswordAccessible
 {
     [SAMKeychain setAccessibilityType:kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly];
     NSError *error;
@@ -291,17 +256,6 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
     return NO;
 }
 
-- (void)backgroundedAppDatabasePasswordInaccessibleWithErrorDescription:(NSString *)errorDescription
-{
-    OWSAssert([UIApplication sharedApplication].applicationState == UIApplicationStateBackground);
-
-    // Presumably this happened in response to a push notification. It's possible that the keychain is corrupted
-    // but it could also just be that the user hasn't yet unlocked their device since our password is
-    // kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-    [NSException raise:TSStorageManagerExceptionNameDatabasePasswordInaccessibleWhileBackgrounded
-                format:@"%@", errorDescription];
-}
-
 - (NSData *)databasePassword
 {
     [SAMKeychain setAccessibilityType:kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly];
@@ -311,37 +265,20 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
         [SAMKeychain passwordForService:keychainService account:keychainDBPassAccount error:&keyFetchError];
 
     if (keyFetchError) {
-        UIApplicationState applicationState = [UIApplication sharedApplication].applicationState;
-        NSString *errorDescription = [NSString stringWithFormat:@"Database password inaccessible. No unlock since device restart? Error: %@ ApplicationState: %d", keyFetchError, (int)applicationState];
-        DDLogError(@"%@ %@", self.tag, errorDescription);
-        [DDLog flushLog];
-
-        if ([UIApplication sharedApplication].applicationState == UIApplicationStateBackground) {
-            // TODO: Rather than crash here, we should detect the situation earlier
-            // and exit gracefully - (in the app delegate?). See the `
-            // This is a last ditch effort to avoid blowing away the user's database.
-            [self backgroundedAppDatabasePasswordInaccessibleWithErrorDescription:errorDescription];
+        switch (keyFetchError.code) {
+            case errSecItemNotFound:
+                dbPassword = [self createAndSetNewDatabasePassword];
+                break;
+            default:
+                DDLogError(@"%@ Getting DB password from keychain failed with error: %@", self.tag, keyFetchError);
+                [NSException raise:TSStorageManagerExceptionNameDatabasePasswordInaccessible
+                            format:@"Getting DB password from keychain failed with error: %@", keyFetchError];
+                break;
         }
-
-        // At this point, either this is a new install so there's no existing password to retrieve
-        // or the keychain has become corrupt.  Either way, we want to get back to a
-        // "known good state" and behave like a new install.
-
-        BOOL shouldHavePassword = [NSFileManager.defaultManager fileExistsAtPath:[self dbPath]];
-        if (shouldHavePassword) {
-            OWSAnalyticsCriticalWithParameters(@"Could not retrieve database password from keychain",
-                @{ @"ErrorCode" : @(keyFetchError.code) });
-        }
-
-        // Try to reset app by deleting database.
-        [self resetSignalStorage];
-
-        dbPassword = [self createAndSetNewDatabasePassword];
     }
 
     return [dbPassword dataUsingEncoding:NSUTF8StringEncoding];
 }
-
 
 - (NSString *)createAndSetNewDatabasePassword
 {
@@ -350,19 +287,16 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
     [SAMKeychain setPassword:newDBPassword forService:keychainService account:keychainDBPassAccount error:&keySetError];
     if (keySetError) {
         DDLogError(@"%@ Setting DB password failed with error: %@", self.tag, keySetError);
-
-        [self deletePasswordFromKeychain];
-
         [NSException raise:TSStorageManagerExceptionNameDatabasePasswordUnwritable
                     format:@"Setting DB password failed with error: %@", keySetError];
     } else {
-        DDLogError(@"Succesfully set new DB password.");
+        DDLogError(@"Succesfully set new DB password. First launch?");
     }
 
     return newDBPassword;
 }
 
-#pragma mark - convenience methods
+#pragma mark convenience methods
 
 - (void)purgeCollection:(NSString *)collection {
     [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
@@ -378,7 +312,7 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 
 - (void)removeObjectForKey:(NSString *)string inCollection:(NSString *)collection {
     [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-        [transaction removeObjectForKey:string inCollection:collection];
+      [transaction removeObjectForKey:string inCollection:collection];
     }];
 }
 
@@ -447,32 +381,6 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
     [self setObject:[NSNumber numberWithInt:integer] forKey:key inCollection:collection];
 }
 
-- (int)incrementIntForKey:(NSString *)key inCollection:(NSString *)collection
-{
-    __block int value = 0;
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-        value = [[transaction objectForKey:key inCollection:collection] intValue];
-        value++;
-        [transaction setObject:@(value) forKey:key inCollection:collection];
-    }];
-    return value;
-}
-
-- (nullable NSDate *)dateForKey:(NSString *)key inCollection:(NSString *)collection
-{
-    NSNumber *value = [self objectForKey:key inCollection:collection];
-    if (value) {
-        return [NSDate dateWithTimeIntervalSince1970:value.doubleValue];
-    } else {
-        return nil;
-    }
-}
-
-- (void)setDate:(nonnull NSDate *)value forKey:(NSString *)key inCollection:(NSString *)collection
-{
-    [self setObject:@(value.timeIntervalSince1970) forKey:key inCollection:collection];
-}
-
 - (void)deleteThreadsAndMessages {
     [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
       [transaction removeAllObjectsInCollection:[TSThread collection]];
@@ -483,30 +391,21 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
     [TSAttachmentStream deleteAttachments];
 }
 
-- (void)deletePasswordFromKeychain
-{
-    [SAMKeychain deletePasswordForService:keychainService account:keychainDBPassAccount];
-}
-
-- (void)deleteDatabaseFile
-{
+- (void)wipeSignalStorage {
+    self.database = nil;
     NSError *error;
+
+    [SAMKeychain deletePasswordForService:keychainService account:keychainDBPassAccount];
     [[NSFileManager defaultManager] removeItemAtPath:[self dbPath] error:&error];
+
+
     if (error) {
         DDLogError(@"Failed to delete database: %@", error.description);
     }
-}
-
-- (void)resetSignalStorage
-{
-    self.database = nil;
-    _dbConnection = nil;
-
-    [self deletePasswordFromKeychain];
-
-    [self deleteDatabaseFile];
 
     [TSAttachmentStream deleteAttachments];
+
+    [[self init] setupDatabase];
 }
 
 #pragma mark - Logging

@@ -26,8 +26,6 @@ static NSString *const TSRegistrationErrorUserInfoHTTPStatus = @"TSHTTPStatus";
 
 + (instancetype)sharedInstance;
 
-@property (nonatomic, strong, readonly) TSNetworkManager *networkManager;
-
 /**
  *  Returns if a user is registered or not
  *
@@ -64,7 +62,6 @@ static NSString *const TSRegistrationErrorUserInfoHTTPStatus = @"TSHTTPStatus";
 + (void)rerequestVoiceWithSuccess:(void (^)())successBlock failure:(void (^)(NSError *error))failureBlock;
 
 - (void)verifyAccountWithCode:(NSString *)verificationCode
-              isWebRTCEnabled:(BOOL)isWebRTCEnabled
                       success:(void (^)())successBlock
                       failure:(void (^)(NSError *error))failureBlock;
 

@@ -135,7 +135,7 @@ static const NSUInteger OWSMessageSchemaVersion = 3;
     return self;
 }
 
-- (void)setExpiresInSeconds:(uint32_t)expiresInSeconds
+- (void)setexpiresInSeconds:(uint32_t)expiresInSeconds
 {
     _expiresInSeconds = expiresInSeconds;
     [self updateExpiresAt];
@@ -173,7 +173,7 @@ static const NSUInteger OWSMessageSchemaVersion = 3;
         NSString *attachmentId = self.attachmentIds[0];
         return [NSString stringWithFormat:@"Media Message with attachmentId:%@", attachmentId];
     } else {
-        return [NSString stringWithFormat:@"%@ with body: %@", [self class], self.body];
+        return [NSString stringWithFormat:@"%@ with body:%@", [self class], self.body];
     }
 }
 
