@@ -4,14 +4,12 @@
 @class TSErrorMessage;
 @class TSIncomingMessage;
 @class TSThread;
-@protocol ContactsManagerProtocol;
 
 @protocol NotificationsProtocol <NSObject>
 
 - (void)notifyUserForIncomingMessage:(TSIncomingMessage *)incomingMessage
                                 from:(NSString *)name
-                            inThread:(TSThread *)thread
-                     contactsManager:(id<ContactsManagerProtocol>)contactsManager;
+                            inThread:(TSThread *)thread;
 
 - (void)notifyUserForErrorMessage:(TSErrorMessage *)error inThread:(TSThread *)thread;
 

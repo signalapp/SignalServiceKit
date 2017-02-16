@@ -2,7 +2,6 @@
 //  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
 //
 
-#import "OWSReadTracking.h"
 #import "TSMessage.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -12,7 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 extern NSString *const TSIncomingMessageWasReadOnThisDeviceNotification;
 
-@interface TSIncomingMessage : TSMessage <OWSReadTracking>
+@interface TSIncomingMessage : TSMessage
 
 /**
  *  Inits an incoming group message without attachments

@@ -3,9 +3,7 @@
 //
 
 #import "TSContactThread.h"
-#import "ContactsManagerProtocol.h"
 #import "ContactsUpdater.h"
-#import "NotificationsProtocol.h"
 #import "TSStorageManager+identityKeyStore.h"
 #import "TextSecureKitEnv.h"
 #import <YapDatabase/YapDatabaseConnection.h>
@@ -29,37 +27,27 @@ NS_ASSUME_NONNULL_BEGIN
                                    transaction:(YapDatabaseReadWriteTransaction *)transaction
                                          relay:(nullable NSString *)relay
 {
-    OWSAssert(contactId);
     SignalRecipient *recipient =
         [SignalRecipient recipientWithTextSecureIdentifier:contactId withTransaction:transaction];
 
     if (!recipient) {
-        // If no recipient record exists for that contactId, create an empty record
-        // for immediate use, then ask ContactsUpdater to try to update it async.
-        recipient =
-            [[SignalRecipient alloc] initWithTextSecureIdentifier:contactId
-                                                            relay:relay
-                                                    supportsVoice:YES
-                                                   // Default to NO; ContactsUpdater will try to update this property.
-                                                   supportsWebRTC:NO];
-        [recipient saveWithTransaction:transaction];
+        recipient = [[SignalRecipient alloc] initWithTextSecureIdentifier:contactId relay:relay supportsVoice:YES];
 
-        // Update recipient with Server record async.
         [[ContactsUpdater sharedUpdater] lookupIdentifier:contactId
-            success:^(SignalRecipient *recipient) {
+            success:^(NSSet<NSString *> *matchedIds) {
             }
             failure:^(NSError *error) {
                 DDLogWarn(@"Failed to lookup contact with error:%@", error);
             }];
+        [recipient saveWithTransaction:transaction];
     }
 
     return [self getOrCreateThreadWithContactId:contactId transaction:transaction];
 }
 
-+ (instancetype)getOrCreateThreadWithContactId:(NSString *)contactId
-                                   transaction:(YapDatabaseReadWriteTransaction *)transaction {
-    TSContactThread *thread =
-        [self fetchObjectWithUniqueID:[self threadIdFromContactId:contactId] transaction:transaction];
++ (instancetype)getOrCreateThreadWithContactId:(NSString *)contactId transaction:(YapDatabaseReadWriteTransaction *)transaction {
+
+    TSContactThread *thread = [self fetchObjectWithUniqueID:[self threadIdFromContactId:contactId] transaction:transaction];
 
     if (!thread) {
         thread = [[TSContactThread alloc] initWithContactId:contactId];

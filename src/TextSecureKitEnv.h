@@ -4,28 +4,16 @@
 //
 //  Created by Frederic Jacobs on 05/12/15.
 
-NS_ASSUME_NONNULL_BEGIN
+#import <Foundation/Foundation.h>
 
-@protocol ContactsManagerProtocol;
-@protocol NotificationsProtocol;
-@protocol OWSCallMessageHandler;
+#import "ContactsManagerProtocol.h"
+#import "NotificationsProtocol.h"
 
 @interface TextSecureKitEnv : NSObject
 
-- (instancetype)initWithCallMessageHandler:(id<OWSCallMessageHandler>)callMessageHandler
-                           contactsManager:(id<ContactsManagerProtocol>)contactsManager
-                      notificationsManager:(id<NotificationsProtocol>)notificationsManager NS_DESIGNATED_INITIALIZER;
-
-- (instancetype)init NS_UNAVAILABLE;
+@property (nonatomic, retain) id<ContactsManagerProtocol> contactsManager;
+@property (nonatomic, retain) id<NotificationsProtocol> notificationsManager;
 
 + (instancetype)sharedEnv;
-+ (void)setSharedEnv:(TextSecureKitEnv *)env;
-
-@property (nonatomic, readonly, strong) id<OWSCallMessageHandler> callMessageHandler;
-@property (nonatomic, readonly, strong) id<ContactsManagerProtocol> contactsManager;
-@property (nonatomic, readonly, strong) id<NotificationsProtocol> notificationsManager;
-
 
 @end
-
-NS_ASSUME_NONNULL_END

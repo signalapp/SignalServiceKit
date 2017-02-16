@@ -19,12 +19,10 @@
 #import "TSUnregisterAccountRequest.h"
 #import "TSUpdateAttributesRequest.h"
 #import "TSVerifyCodeRequest.h"
+
+
 #import <AFNetworking/AFHTTPSessionManager.h>
 #import <Foundation/Foundation.h>
-
-extern NSString *const TSNetworkManagerDomain;
-
-NS_ASSUME_NONNULL_BEGIN
 
 @interface TSNetworkManager : NSObject
 
@@ -35,5 +33,3 @@ NS_ASSUME_NONNULL_BEGIN
             failure:(void (^)(NSURLSessionDataTask *task, NSError *error))failure NS_SWIFT_NAME(makeRequest(_:success:failure:));
 
 @end
-
-NS_ASSUME_NONNULL_END

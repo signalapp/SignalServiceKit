@@ -17,12 +17,6 @@
 - (NSDate *)date;
 - (NSString *)description;
 
-/**
- * When an interaction is updated, it often affects the UI for it's containing thread. Touching it's thread will notify
- * any observers so they can redraw any related UI.
- */
-- (void)touchThreadWithTransaction:(YapDatabaseReadWriteTransaction *)transaction;
-
 #pragma mark Utility Method
 
 + (NSString *)stringFromTimeStamp:(uint64_t)timestamp;

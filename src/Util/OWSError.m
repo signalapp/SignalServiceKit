@@ -29,22 +29,9 @@ NSError *OWSErrorMakeFailedToSendOutgoingMessageError()
 
 NSError *OWSErrorMakeNoSuchSignalRecipientError()
 {
-    return OWSErrorWithCodeDescription(OWSErrorCodeNoSuchSignalRecipient,
+    return OWSErrorWithCodeDescription(OWSErrorCodeFailedToSendOutgoingMessage,
         NSLocalizedString(
             @"ERROR_DESCRIPTION_UNREGISTERED_RECIPIENT", @"Error message when attempting to send message"));
-}
-
-NSError *OWSErrorMakeAssertionError()
-{
-    return OWSErrorWithCodeDescription(OWSErrorCodeFailedToSendOutgoingMessage,
-                                       NSLocalizedString(@"ERROR_DESCRIPTION_UNKNOWN_ERROR", @"Worst case generic error message"));
-}
-
-NSError *OWSErrorMakeMessageSendDisabledDueToPreKeyUpdateFailuresError()
-{
-    return OWSErrorWithCodeDescription(OWSErrorCodeMessageSendDisabledDueToPreKeyUpdateFailures,
-        NSLocalizedString(@"ERROR_DESCRIPTION_MESSAGE_SEND_DISABLED_PREKEY_UPDATE_FAILURES",
-            @"Error mesage indicating that message send is disabled due to prekey update failures"));
 }
 
 NS_ASSUME_NONNULL_END

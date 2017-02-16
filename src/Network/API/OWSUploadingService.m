@@ -5,6 +5,7 @@
 #import "OWSUploadingService.h"
 #import "Cryptography.h"
 #import "MIMETypeUtil.h"
+#import "OWSDispatch.h"
 #import "OWSError.h"
 #import "TSAttachmentStream.h"
 #import "TSNetworkManager.h"
