@@ -54,6 +54,14 @@
     return [TSThread fetchObjectWithUniqueID:self.uniqueThreadId];
 }
 
++ (MTLPropertyStorage)storageBehaviorForPropertyWithKey:(NSString *)propertyKey {
+    if ([propertyKey isEqualToString:@"message"]) {
+        return MTLPropertyStorageNone;
+    }
+
+    return [super storageBehaviorForPropertyWithKey:propertyKey];
+}
+
 #pragma mark Date operations
 
 - (uint64_t)millisecondsTimestamp {
