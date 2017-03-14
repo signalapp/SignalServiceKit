@@ -1,5 +1,6 @@
-//  Created by Frederic Jacobs on 12/11/14.
-//  Copyright (c) 2014 Open Whisper Systems. All rights reserved.
+//
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//
 
 #import "TSMessage.h"
 #import "NSDate+millisecondTimeStamp.h"
@@ -101,6 +102,7 @@ static const NSUInteger OWSMessageSchemaVersion = 3;
     _expiresInSeconds = expiresInSeconds;
     _expireStartedAt = expireStartedAt;
     [self updateExpiresAt];
+    _receivedAtDate = [NSDate date];
 
     return self;
 }
@@ -130,7 +132,14 @@ static const NSUInteger OWSMessageSchemaVersion = 3;
         _attachmentIds = [NSMutableArray new];
     }
 
+    if (!_receivedAtDate) {
+        // TSIncomingMessage.receivedAt has been superceded by TSMessage.receivedAtDate.
+        NSDate *receivedAt = [coder decodeObjectForKey:@"receivedAt"];
+        _receivedAtDate = receivedAt;
+    }
+
     _schemaVersion = OWSMessageSchemaVersion;
+
     return self;
 }
 
@@ -172,7 +181,7 @@ static const NSUInteger OWSMessageSchemaVersion = 3;
         NSString *attachmentId = self.attachmentIds[0];
         return [NSString stringWithFormat:@"Media Message with attachmentId:%@", attachmentId];
     } else {
-        return [NSString stringWithFormat:@"%@ with body:%@", [self class], self.body];
+        return [NSString stringWithFormat:@"%@ with body: %@", [self class], self.body];
     }
 }
 
@@ -212,6 +221,24 @@ static const NSUInteger OWSMessageSchemaVersion = 3;
 - (BOOL)isExpiringMessage
 {
     return self.expiresInSeconds > 0;
+}
+
+- (nullable NSDate *)receiptDateForSorting
+{
+    // Prefer receivedAtDate if set, otherwise fallback to date.
+    return self.receivedAtDate ?: self.date;
+}
+
+#pragma mark - Logging
+
++ (NSString *)tag
+{
+    return [NSString stringWithFormat:@"[%@]", self.class];
+}
+
+- (NSString *)tag
+{
+    return self.class.tag;
 }
 
 @end

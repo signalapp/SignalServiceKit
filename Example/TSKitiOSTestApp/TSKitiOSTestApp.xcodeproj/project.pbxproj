@@ -20,7 +20,6 @@
 		454021ED1D960ABF00F2126D /* OWSDisappearingMessageFinderTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 454021EC1D960ABF00F2126D /* OWSDisappearingMessageFinderTest.m */; };
 		454092FA1DB7AFDE00579DE1 /* OWSFakeNetworkManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 454092F91DB7AFDE00579DE1 /* OWSFakeNetworkManager.m */; };
 		45458B751CC342B600A02153 /* SignedPreKeyDeletionTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 45458B6A1CC342B600A02153 /* SignedPreKeyDeletionTests.m */; };
-		45458B761CC342B600A02153 /* TSAttachmentsTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 45458B6C1CC342B600A02153 /* TSAttachmentsTest.m */; };
 		45458B771CC342B600A02153 /* TSMessageStorageTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 45458B6E1CC342B600A02153 /* TSMessageStorageTests.m */; };
 		45458B781CC342B600A02153 /* TSStorageIdentityKeyStoreTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 45458B6F1CC342B600A02153 /* TSStorageIdentityKeyStoreTests.m */; };
 		45458B791CC342B600A02153 /* TSStoragePreKeyStoreTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 45458B701CC342B600A02153 /* TSStoragePreKeyStoreTests.m */; };
@@ -37,6 +36,7 @@
 		45B840211D988DA100F9E938 /* OWSReadReceiptTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 45B840201D988DA100F9E938 /* OWSReadReceiptTest.m */; };
 		45C6A09A1D2F029B007D8AC0 /* TSMessageTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 45C6A0991D2F029B007D8AC0 /* TSMessageTest.m */; };
 		45D7243F1D67899F00E0CA54 /* OWSDeviceProvisionerTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 45D7243E1D67899F00E0CA54 /* OWSDeviceProvisionerTest.m */; };
+		45E741B61E5D14E800735842 /* OWSIncomingMessageFinderTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 45E741B51E5D14E800735842 /* OWSIncomingMessageFinderTest.m */; };
 		51520592F83F2440F2DE4D67 /* libPods-TSKitiOSTestApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B8362AB8E280E0F64352F08A /* libPods-TSKitiOSTestApp.a */; };
 		6323E1F7730289398452E5C5 /* OWSFingerprintTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 6323E02A33682A8838FE3F27 /* OWSFingerprintTest.m */; };
 		6323E339D5B8F4CB77EB3ED4 /* SignalRecipientTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 6323E3E540CF763D71DACB59 /* SignalRecipientTest.m */; };
@@ -78,7 +78,6 @@
 		454092F81DB7AFDE00579DE1 /* OWSFakeNetworkManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = OWSFakeNetworkManager.h; path = ../../../tests/TestSupport/Fakes/OWSFakeNetworkManager.h; sourceTree = "<group>"; };
 		454092F91DB7AFDE00579DE1 /* OWSFakeNetworkManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OWSFakeNetworkManager.m; path = ../../../tests/TestSupport/Fakes/OWSFakeNetworkManager.m; sourceTree = "<group>"; };
 		45458B6A1CC342B600A02153 /* SignedPreKeyDeletionTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SignedPreKeyDeletionTests.m; sourceTree = "<group>"; };
-		45458B6C1CC342B600A02153 /* TSAttachmentsTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TSAttachmentsTest.m; sourceTree = "<group>"; };
 		45458B6E1CC342B600A02153 /* TSMessageStorageTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TSMessageStorageTests.m; sourceTree = "<group>"; };
 		45458B6F1CC342B600A02153 /* TSStorageIdentityKeyStoreTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TSStorageIdentityKeyStoreTests.m; sourceTree = "<group>"; };
 		45458B701CC342B600A02153 /* TSStoragePreKeyStoreTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TSStoragePreKeyStoreTests.m; sourceTree = "<group>"; };
@@ -99,6 +98,7 @@
 		45B840201D988DA100F9E938 /* OWSReadReceiptTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OWSReadReceiptTest.m; path = ../../../tests/Devices/OWSReadReceiptTest.m; sourceTree = "<group>"; };
 		45C6A0991D2F029B007D8AC0 /* TSMessageTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = TSMessageTest.m; path = ../../../tests/Messages/Interactions/TSMessageTest.m; sourceTree = "<group>"; };
 		45D7243E1D67899F00E0CA54 /* OWSDeviceProvisionerTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OWSDeviceProvisionerTest.m; path = ../../../tests/Devices/OWSDeviceProvisionerTest.m; sourceTree = "<group>"; };
+		45E741B51E5D14E800735842 /* OWSIncomingMessageFinderTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OWSIncomingMessageFinderTest.m; path = ../../../tests/Messages/OWSIncomingMessageFinderTest.m; sourceTree = "<group>"; };
 		6323E02A33682A8838FE3F27 /* OWSFingerprintTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OWSFingerprintTest.m; path = ../../../tests/Security/OWSFingerprintTest.m; sourceTree = "<group>"; };
 		6323E3E540CF763D71DACB59 /* SignalRecipientTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = SignalRecipientTest.m; path = ../../tests/Contacts/SignalRecipientTest.m; sourceTree = "<group>"; };
 		B6273DD11C13A2E500738558 /* TSKitiOSTestApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TSKitiOSTestApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -176,15 +176,6 @@
 			path = ../../../tests/Account;
 			sourceTree = "<group>";
 		};
-		45458B6B1CC342B600A02153 /* Attachments */ = {
-			isa = PBXGroup;
-			children = (
-				45458B6C1CC342B600A02153 /* TSAttachmentsTest.m */,
-			);
-			name = Attachments;
-			path = ../../../tests/Attachments;
-			sourceTree = "<group>";
-		};
 		45458B6D1CC342B600A02153 /* Storage */ = {
 			isa = PBXGroup;
 			children = (
@@ -237,6 +228,7 @@
 				45046FDF1D95A6130015EFF2 /* TSMessagesManagerTest.m */,
 				454021EC1D960ABF00F2126D /* OWSDisappearingMessageFinderTest.m */,
 				453E1FCE1DA8313100DDD7B7 /* OWSMessageSenderTest.m */,
+				45E741B51E5D14E800735842 /* OWSIncomingMessageFinderTest.m */,
 			);
 			name = Messages;
 			sourceTree = "<group>";
@@ -330,7 +322,6 @@
 			children = (
 				453E1FD41DA83DD500DDD7B7 /* TestSupport */,
 				45458B691CC342B600A02153 /* Account */,
-				45458B6B1CC342B600A02153 /* Attachments */,
 				459850BF1D22C6C4006FFEDB /* Contacts */,
 				45D7243D1D67894100E0CA54 /* Devices */,
 				45C6A0971D2F0254007D8AC0 /* Messages */,
@@ -458,7 +449,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_ROOT}/../Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [[ $? != 0 ]] ; then\n    cat << EOM\nerror: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\nEOM\n    exit 1\nfi\n";
+			shellScript = "diff \"${PODS_ROOT}/../Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		276B029791E679B0E87877B7 /* [CP] Copy Pods Resources */ = {
@@ -533,7 +524,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_ROOT}/../Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [[ $? != 0 ]] ; then\n    cat << EOM\nerror: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\nEOM\n    exit 1\nfi\n";
+			shellScript = "diff \"${PODS_ROOT}/../Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -561,10 +552,10 @@
 				45D7243F1D67899F00E0CA54 /* OWSDeviceProvisionerTest.m in Sources */,
 				4516E3E81DD153CC00DC4206 /* TSGroupThreadTest.m in Sources */,
 				45458B791CC342B600A02153 /* TSStoragePreKeyStoreTests.m in Sources */,
+				45E741B61E5D14E800735842 /* OWSIncomingMessageFinderTest.m in Sources */,
 				452EE6D51D4AC43300E934BA /* OWSOrphanedDataCleanerTest.m in Sources */,
 				450E3C9A1D96DD2600BF4EB6 /* OWSDisappearingMessagesJobTest.m in Sources */,
 				452EE6CF1D4A754C00E934BA /* TSThreadTest.m in Sources */,
-				45458B761CC342B600A02153 /* TSAttachmentsTest.m in Sources */,
 				45C6A09A1D2F029B007D8AC0 /* TSMessageTest.m in Sources */,
 				453E1FCF1DA8313100DDD7B7 /* OWSMessageSenderTest.m in Sources */,
 				45AE484C1E072871004D96C2 /* OWSFakeCallMessageHandler.m in Sources */,

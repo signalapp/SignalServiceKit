@@ -5,6 +5,7 @@
 #import "OWSMessageSender.h"
 #import "ContactsUpdater.h"
 #import "NSData+messagePadding.h"
+#import "OWSDevice.h"
 #import "OWSDisappearingMessagesJob.h"
 #import "OWSError.h"
 #import "OWSLegacyMessageServiceParams.h"
@@ -23,6 +24,7 @@
 #import "TSInvalidIdentityKeySendingErrorMessage.h"
 #import "TSNetworkManager.h"
 #import "TSOutgoingMessage.h"
+#import "TSPreKeyManager.h"
 #import "TSStorageManager+IdentityKeyStore.h"
 #import "TSStorageManager+PreKeyStore.h"
 #import "TSStorageManager+SignedPreKeyStore.h"
@@ -409,6 +411,28 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
             success:(void (^)())successHandler
             failure:(void (^)(NSError *error))failureHandler
 {
+    DDLogDebug(@"%@ sending message to service: %@", self.tag, message.debugDescription);
+
+    if ([TSPreKeyManager isAppLockedDueToPreKeyUpdateFailures]) {
+        OWSAnalyticsError(@"Message send failed due to prekey update failures");
+
+        // Retry prekey update every time user tries to send a message while app
+        // is disabled due to prekey update failures.
+        //
+        // Only try to update the signed prekey; updating it is sufficient to
+        // re-enable message sending.
+        [TSPreKeyManager registerPreKeysWithMode:RefreshPreKeysMode_SignedOnly
+            success:^{
+                DDLogInfo(@"%@ New prekeys registered with server.", self.tag);
+            }
+            failure:^(NSError *error) {
+                DDLogWarn(@"%@ Failed to update prekeys with the server: %@", self.tag, error);
+            }];
+
+        DDLogError(@"%@ Message send failed due to repeated inability to update prekeys.", self.tag);
+        return failureHandler(OWSErrorMakeMessageSendDisabledDueToPreKeyUpdateFailuresError());
+    }
+
     if (remainingAttempts <= 0) {
         // We should always fail with a specific error.
         DDLogError(@"%@ Unexpected generic failure.", self.tag);
@@ -463,6 +487,9 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
             });
         }
         failure:^(NSURLSessionDataTask *task, NSError *error) {
+            DDLogDebug(@"%@ failure sending to service: %@", self.tag, message.debugDescription);
+            [DDLog flushLog];
+
             NSHTTPURLResponse *response = (NSHTTPURLResponse *)task.response;
             long statuscode = response.statusCode;
             NSData *responseData = error.userInfo[AFNetworkingOperationFailingURLResponseDataErrorKey];
@@ -473,6 +500,7 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
                 }
 
                 dispatch_async([OWSDispatch sendingQueue], ^{
+                    DDLogDebug(@"%@ Retrying: %@", self.tag, message.debugDescription);
                     [self sendMessage:message
                             recipient:recipient
                                thread:thread
@@ -554,6 +582,9 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
 {
     [self saveMessage:message withState:TSOutgoingMessageStateSent];
     if (message.shouldSyncTranscript) {
+        // TODO: I suspect we shouldn't optimistically set hasSyncedTranscript.
+        //       We could set this in a success handler for [sendSyncTranscriptForMessage:].
+
         message.hasSyncedTranscript = YES;
         [self sendSyncTranscriptForMessage:message];
     }
@@ -592,6 +623,7 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
             [[TSIncomingMessage alloc] initWithTimestamp:(outgoingMessage.timestamp + 1)
                                                 inThread:cThread
                                                 authorId:[cThread contactIdentifier]
+                                          sourceDeviceId:[OWSDevice currentDeviceId]
                                              messageBody:outgoingMessage.body
                                            attachmentIds:outgoingMessage.attachmentIds
                                         expiresInSeconds:outgoingMessage.expiresInSeconds];
