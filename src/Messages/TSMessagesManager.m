@@ -115,6 +115,7 @@ NS_ASSUME_NONNULL_BEGIN
 {
     OWSAssert([NSThread isMainThread]);
     @try {
+        DDLogError(@"%@ handleReceivedEnvelope of type: %d", self.tag, (int) envelope.type);
         switch (envelope.type) {
             case OWSSignalServiceProtosEnvelopeTypeCiphertext: {
                 [self handleSecureMessageAsync:envelope
