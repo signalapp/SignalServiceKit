@@ -226,6 +226,7 @@ NS_ASSUME_NONNULL_BEGIN
         int deviceId = messageEnvelope.sourceDevice;
 
         if (![storageManager containsSession:recipientId deviceId:deviceId]) {
+            DDLogError(@"%@ received NON-prekey message, but we don't have a session for recipient:%@.%d", self.tag, recipientId, deviceId);
             [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
                 TSErrorMessage *errorMessage =
                     [TSErrorMessage missingSessionWithEnvelope:messageEnvelope withTransaction:transaction];
