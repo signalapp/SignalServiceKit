@@ -40,6 +40,36 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+static TSMessagesManager *shareMessagesManager = nil;
+
+id shareMessagesManagerLock() {
+    static id shareMessagesManagerLock = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        shareMessagesManagerLock = [NSObject new];
+    });
+    return shareMessagesManagerLock;
+}
+
+TSMessagesManager *GetShareMessagesManager() {
+    @synchronized (shareMessagesManagerLock()) {
+        OWSCAssert(shareMessagesManager);
+        
+        return shareMessagesManager;
+    }
+}
+
+void SetShareMessagesManager(TSMessagesManager *value) {
+    @synchronized (shareMessagesManagerLock()) {
+        OWSCAssert(!shareMessagesManager);
+        OWSCAssert(value);
+        
+        shareMessagesManager = value;
+    }
+}
+
+#pragma mark -
+
 @interface TSMessagesManager ()
 
 @property (nonatomic, readonly) id<OWSCallMessageHandler> callMessageHandler;
@@ -51,35 +81,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+#pragma mark -
+
 @implementation TSMessagesManager
 
 + (instancetype)sharedManager {
-    static TSMessagesManager *sharedMyManager = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        sharedMyManager = [[self alloc] initDefault];
-    });
-    return sharedMyManager;
-}
-
-- (instancetype)initDefault
-{
-    TSNetworkManager *networkManager = [TSNetworkManager sharedManager];
-    TSStorageManager *storageManager = [TSStorageManager sharedManager];
-    id<ContactsManagerProtocol> contactsManager = [TextSecureKitEnv sharedEnv].contactsManager;
-    id<OWSCallMessageHandler> callMessageHandler = [TextSecureKitEnv sharedEnv].callMessageHandler;
-    ContactsUpdater *contactsUpdater = [ContactsUpdater sharedUpdater];
-    OWSMessageSender *messageSender = [[OWSMessageSender alloc] initWithNetworkManager:networkManager
-                                                                        storageManager:storageManager
-                                                                       contactsManager:contactsManager
-                                                                       contactsUpdater:contactsUpdater];
-
-    return [self initWithNetworkManager:networkManager
-                         storageManager:storageManager
-                     callMessageHandler:callMessageHandler
-                        contactsManager:contactsManager
-                        contactsUpdater:contactsUpdater
-                          messageSender:messageSender];
+    return GetShareMessagesManager();
 }
 
 - (instancetype)initWithNetworkManager:(TSNetworkManager *)networkManager
@@ -106,6 +113,8 @@ NS_ASSUME_NONNULL_BEGIN
     _disappearingMessagesJob = [[OWSDisappearingMessagesJob alloc] initWithStorageManager:storageManager];
     _incomingMessageFinder = [[OWSIncomingMessageFinder alloc] initWithDatabase:storageManager.database];
 
+    SetShareMessagesManager(self);
+    
     return self;
 }
 
