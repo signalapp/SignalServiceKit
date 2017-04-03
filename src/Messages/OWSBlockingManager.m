@@ -27,6 +27,9 @@ NSString *const kOWSBlockingManager_SyncedBlockedPhoneNumbersKey = @"kOWSBlockin
 // phone numbers.
 @property (nonatomic, readonly) NSMutableSet<NSString *> *blockedPhoneNumberSet;
 
+// This id is used to discard obsolete sync requests.
+@property (nonatomic) long lastSyncId;
+
 @end
 
 #pragma mark -
@@ -217,7 +220,22 @@ NSString *const kOWSBlockingManager_SyncedBlockedPhoneNumbersKey = @"kOWSBlockin
 
 - (void)sendBlockedPhoneNumbersMessage:(NSArray<NSString *> *)blockedPhoneNumbers
 {
+    OWSAssert([NSThread isMainThread]);
+
+    const int kSyncMessageRetryCount = 3;
+    long syncId = ++self.lastSyncId;
+    [self sendBlockedPhoneNumbersMessage:blockedPhoneNumbers
+                 withRemainingRetryCount:kSyncMessageRetryCount
+                                  syncId:syncId];
+}
+
+- (void)sendBlockedPhoneNumbersMessage:(NSArray<NSString *> *)blockedPhoneNumbers
+               withRemainingRetryCount:(int)remainingRetryCount
+                                syncId:(long)syncId
+{
+    OWSAssert([NSThread isMainThread]);
     OWSAssert(blockedPhoneNumbers);
+    OWSAssert(remainingRetryCount > 0);
 
     OWSBlockedPhoneNumbersMessage *message =
         [[OWSBlockedPhoneNumbersMessage alloc] initWithPhoneNumbers:blockedPhoneNumbers];
@@ -232,7 +250,13 @@ NSString *const kOWSBlockingManager_SyncedBlockedPhoneNumbersKey = @"kOWSBlockin
         failure:^(NSError *error) {
             DDLogError(@"%@ Failed to send blocked phone numbers sync message with error: %@", self.tag, error);
 
-            // TODO: We might want to retry more often than just app launch.
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (remainingRetryCount > 1 && self.lastSyncId == syncId) {
+                    [self sendBlockedPhoneNumbersMessage:blockedPhoneNumbers
+                                 withRemainingRetryCount:remainingRetryCount - 1
+                                                  syncId:syncId];
+                }
+            });
         }];
 }
 
