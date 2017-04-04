@@ -35,6 +35,7 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 @property (nonatomic) SRWebSocket *websocket;
 @property (nonatomic) SocketStatus status;
 
+@property (nonatomic) BOOL didStartBackgroundTask;
 @property (nonatomic) UIBackgroundTaskIdentifier fetchingTaskIdentifier;
 
 @property (nonatomic) NSTimer *backgroundKeepAliveTimer;
@@ -56,6 +57,7 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     
     OWSAssert([NSThread isMainThread]);
 
+    _fetchingTaskIdentifier = UIBackgroundTaskInvalid;
     _signalService = [OWSSignalService new];
     _status = kSocketStatusClosed;
 
@@ -70,8 +72,7 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     static TSSocketManager *sharedMyManager = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-      sharedMyManager                        = [[self alloc] init];
-      sharedMyManager.fetchingTaskIdentifier = UIBackgroundTaskInvalid;
+      sharedMyManager = [[self alloc] init];
     });
     return sharedMyManager;
 }
