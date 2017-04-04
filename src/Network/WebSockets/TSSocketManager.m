@@ -36,6 +36,7 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 @property (nonatomic) SocketStatus status;
 
 @property (nonatomic) BOOL didStartBackgroundTask;
+@property (nonatomic) NSDate *startedBackgroundTaskAt;
 @property (nonatomic) UIBackgroundTaskIdentifier fetchingTaskIdentifier;
 
 @property (nonatomic) NSTimer *backgroundKeepAliveTimer;
@@ -58,6 +59,7 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     OWSAssert([NSThread isMainThread]);
 
     _fetchingTaskIdentifier = UIBackgroundTaskInvalid;
+    _startedBackgroundTaskAt = [NSDate new];
     _signalService = [OWSSignalService new];
     _status = kSocketStatusClosed;
 
@@ -494,11 +496,31 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     OWSAssert([NSThread isMainThread]);
 
     if (self.didStartBackgroundTask) {
-        DDLogWarn(@"%@ Got called to become active in the background but there was already a background task running.",
-            self.tag);
-        return;
+
+        // iOS meters our background time, so it's possible we were killed last time before we
+        // cleaned up the last background task. We verify here that the "running" background task
+        // was started at a feasible time. Else we assume it's a stale background task that's no longer
+        // actually running.
+        if ([self.startedBackgroundTaskAt dateByAddingTimeInterval:kBackgroundConnectTimer] > [NSDate new]) {
+            DDLogInfo(
+                @"%@ Got called to become active in the background but there is already a background task running.",
+                self.tag);
+            return;
+        } else {
+            DDLogWarn(@"%@ Assuming previous background task expired since it started at: %@",
+                self.tag,
+                self.startedBackgroundTaskAt);
+
+            // We want to figure out how to ensure our expiration handler is always being called, so we
+            // can always clean up after ourselves. This assert is here to detect when this is happening.
+            OWSAssert(NO);
+
+            // Close any existing background task, and fall through to start a new one.
+            [self closeBackgroundTask];
+        }
     }
 
+    DDLogDebug(@"%@ starting new background task", self.tag);
     [self.backgroundConnectTimer invalidate];
     self.backgroundConnectTimer = [NSTimer timerWithTimeInterval:kBackgroundConnectTimer
                                                           target:self
@@ -510,7 +532,7 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 
     [self.backgroundKeepAliveTimer invalidate];
     self.backgroundKeepAliveTimer = nil;
-    self.fetchingTaskIdentifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+    [self beginBackgroundTaskWithExpirationHandler:^{
         OWSAssert([NSThread isMainThread]);
 
         [TSSocketManager resignActivity];
@@ -536,6 +558,15 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
         [[self class] resignActivity];
     }
     [self closeBackgroundTask];
+}
+
+- (void)beginBackgroundTaskWithExpirationHandler:(void (^)())expirationHandler
+{
+    AssertIsOnMainThread();
+
+    self.fetchingTaskIdentifier =
+        [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:expirationHandler];
+    self.startedBackgroundTaskAt = [NSDate new];
 }
 
 - (void)closeBackgroundTask {
