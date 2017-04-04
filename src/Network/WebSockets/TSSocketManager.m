@@ -344,7 +344,7 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     
     [self.backgroundConnectTimer invalidate];
 
-    if (self.fetchingTaskIdentifier) {
+    if (self.didStartBackgroundTask) {
         [self.backgroundKeepAliveTimer invalidate];
 
         self.backgroundKeepAliveTimer = [NSTimer timerWithTimeInterval:kBackgroundConnectKeepAlive
@@ -432,14 +432,17 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
     if ([UIApplication sharedApplication].applicationState == UIApplicationStateActive) {
         // If app is active, keep web socket alive.
         return YES;
-    } else if (self.backgroundKeepAliveTimer ||
-               self.backgroundConnectTimer ||
-               self.fetchingTaskIdentifier != UIBackgroundTaskInvalid) {
+    } else if (self.backgroundKeepAliveTimer || self.backgroundConnectTimer || self.didStartBackgroundTask) {
         // If app is doing any work in the background, keep web socket alive.
         return YES;
     } else {
         return NO;
     }
+}
+
+- (BOOL)didStartBackgroundTask
+{
+    return self.fetchingTaskIdentifier != UIBackgroundTaskInvalid;
 }
 
 - (void)scheduleRetry {
@@ -473,8 +476,8 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 
 - (void)becomeActiveFromForeground {
     OWSAssert([NSThread isMainThread]);
-    
-    if (self.fetchingTaskIdentifier != UIBackgroundTaskInvalid) {
+
+    if (self.didStartBackgroundTask) {
         [self closeBackgroundTask];
     }
     
@@ -489,31 +492,32 @@ NSString *const SocketConnectingNotification = @"SocketConnectingNotification";
 
 - (void)becomeActiveFromBackgroundExpectMessage:(BOOL)expected {
     OWSAssert([NSThread isMainThread]);
-    
-    if (self.fetchingTaskIdentifier == UIBackgroundTaskInvalid) {
-        [self.backgroundConnectTimer invalidate];
-        self.backgroundConnectTimer = [NSTimer timerWithTimeInterval:kBackgroundConnectTimer
-                                                              target:self
-                                                            selector:@selector(backgroundConnectTimerExpired)
-                                                            userInfo:nil
-                                                             repeats:NO];
-        NSRunLoop *loop = [NSRunLoop mainRunLoop];
-        [loop addTimer:[TSSocketManager sharedManager].backgroundConnectTimer forMode:NSDefaultRunLoopMode];
-        
-        [self.backgroundKeepAliveTimer invalidate];
-        self.backgroundKeepAliveTimer = nil;
-        self.fetchingTaskIdentifier =
-        [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
-            OWSAssert([NSThread isMainThread]);
-            
-            [TSSocketManager resignActivity];
-            [[TSSocketManager sharedManager] closeBackgroundTask];
-        }];
-        
-        [self becomeActive];
-    } else {
-        DDLogWarn(@"Got called to become active in the background but there was already a background task running.");
+
+    if (self.didStartBackgroundTask) {
+        DDLogWarn(@"%@ Got called to become active in the background but there was already a background task running.",
+            self.tag);
+        return;
     }
+
+    [self.backgroundConnectTimer invalidate];
+    self.backgroundConnectTimer = [NSTimer timerWithTimeInterval:kBackgroundConnectTimer
+                                                          target:self
+                                                        selector:@selector(backgroundConnectTimerExpired)
+                                                        userInfo:nil
+                                                         repeats:NO];
+    NSRunLoop *loop = [NSRunLoop mainRunLoop];
+    [loop addTimer:[TSSocketManager sharedManager].backgroundConnectTimer forMode:NSDefaultRunLoopMode];
+
+    [self.backgroundKeepAliveTimer invalidate];
+    self.backgroundKeepAliveTimer = nil;
+    self.fetchingTaskIdentifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+        OWSAssert([NSThread isMainThread]);
+
+        [TSSocketManager resignActivity];
+        [[TSSocketManager sharedManager] closeBackgroundTask];
+    }];
+
+    [self becomeActive];
 }
 
 - (void)backgroundConnectTimerExpired {
