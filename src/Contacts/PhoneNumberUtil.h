@@ -1,3 +1,7 @@
+//
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//
+
 #import <Foundation/Foundation.h>
 #import "NBPhoneNumberUtil.h"
 #import "PhoneNumber.h"
@@ -6,10 +10,12 @@
 
 @property (nonatomic, retain) NBPhoneNumberUtil *nbPhoneNumberUtil;
 
-+ (NSString *)callingCodeFromCountryCode:(NSString *)code;
-+ (NSString *)countryNameFromCountryCode:(NSString *)code;
++ (BOOL)name:(NSString *)nameString matchesQuery:(NSString *)queryString;
+
++ (NSString *)callingCodeFromCountryCode:(NSString *)countryCode;
++ (NSString *)countryNameFromCountryCode:(NSString *)countryCode;
 + (NSArray *)countryCodesForSearchTerm:(NSString *)searchTerm;
-+ (NSArray *)validCountryCallingPrefixes:(NSString *)string;
++ (NSArray *)countryCodesFromCallingCode:(NSString *)callingCode;
 
 + (NSUInteger)translateCursorPosition:(NSUInteger)offset
                                  from:(NSString *)source

@@ -10,6 +10,7 @@
 #import "NSDate+millisecondTimeStamp.h"
 #import "NotificationsProtocol.h"
 #import "OWSAttachmentsProcessor.h"
+#import "OWSBlockingManager.h"
 #import "OWSCallMessageHandler.h"
 #import "OWSDisappearingConfigurationUpdateInfoMessage.h"
 #import "OWSDisappearingMessagesConfiguration.h"
@@ -48,6 +49,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) OWSMessageSender *messageSender;
 @property (nonatomic, readonly) OWSDisappearingMessagesJob *disappearingMessagesJob;
 @property (nonatomic, readonly) OWSIncomingMessageFinder *incomingMessageFinder;
+@property (nonatomic, readonly) OWSBlockingManager *blockingManager;
 
 @end
 
@@ -69,10 +71,7 @@ NS_ASSUME_NONNULL_BEGIN
     id<ContactsManagerProtocol> contactsManager = [TextSecureKitEnv sharedEnv].contactsManager;
     id<OWSCallMessageHandler> callMessageHandler = [TextSecureKitEnv sharedEnv].callMessageHandler;
     ContactsUpdater *contactsUpdater = [ContactsUpdater sharedUpdater];
-    OWSMessageSender *messageSender = [[OWSMessageSender alloc] initWithNetworkManager:networkManager
-                                                                        storageManager:storageManager
-                                                                       contactsManager:contactsManager
-                                                                       contactsUpdater:contactsUpdater];
+    OWSMessageSender *messageSender = [TextSecureKitEnv sharedEnv].messageSender;
 
     return [self initWithNetworkManager:networkManager
                          storageManager:storageManager
@@ -105,15 +104,67 @@ NS_ASSUME_NONNULL_BEGIN
     _dbConnection = storageManager.newDatabaseConnection;
     _disappearingMessagesJob = [[OWSDisappearingMessagesJob alloc] initWithStorageManager:storageManager];
     _incomingMessageFinder = [[OWSIncomingMessageFinder alloc] initWithDatabase:storageManager.database];
+    _blockingManager = [OWSBlockingManager sharedManager];
+
+    OWSSingletonAssert();
 
     return self;
 }
 
 #pragma mark - message handling
 
+- (NSString *)descriptionForEnvelope:(OWSSignalServiceProtosEnvelope *)envelope
+{
+    OWSAssert(envelope != nil);
+    NSString *envelopeType;
+    switch (envelope.type) {
+        case OWSSignalServiceProtosEnvelopeTypeReceipt:
+            envelopeType = @"DeliveryReceipt";
+            break;
+        case OWSSignalServiceProtosEnvelopeTypeUnknown:
+            // Shouldn't happen
+            OWSAssert(NO);
+            envelopeType = @"Unknown";
+            break;
+        case OWSSignalServiceProtosEnvelopeTypeCiphertext:
+            envelopeType = @"SignalEncryptedMessage";
+            break;
+        case OWSSignalServiceProtosEnvelopeTypeKeyExchange:
+            // Unsupported
+            OWSAssert(NO);
+            envelopeType = @"KeyExchange";
+            break;
+        case OWSSignalServiceProtosEnvelopeTypePrekeyBundle:
+            envelopeType = @"PreKeyEncryptedMessage";
+            break;
+        default:
+            // Shouldn't happen
+            OWSAssert(NO);
+            envelopeType = @"Other";
+            break;
+    }
+
+    return [NSString stringWithFormat:@"<Envelope type: %@, source: %@.%d, timestamp: %llu content.length: %lu>",
+                     envelopeType,
+                     envelope.source,
+                     envelope.sourceDevice,
+                     envelope.timestamp,
+                     (unsigned long)envelope.content.length];
+}
+
 - (void)handleReceivedEnvelope:(OWSSignalServiceProtosEnvelope *)envelope
 {
     OWSAssert([NSThread isMainThread]);
+
+    DDLogInfo(@"%@ received envelope: %@", self.tag, [self descriptionForEnvelope:envelope]);
+
+    OWSAssert(envelope.source.length > 0);
+    BOOL isEnvelopeBlocked = [_blockingManager.blockedPhoneNumbers containsObject:envelope.source];
+    if (isEnvelopeBlocked) {
+        DDLogInfo(@"%@ ignoring blocked envelope: %@", self.tag, envelope.source);
+        return;
+    }
+
     @try {
         switch (envelope.type) {
             case OWSSignalServiceProtosEnvelopeTypeCiphertext: {
@@ -183,24 +234,24 @@ NS_ASSUME_NONNULL_BEGIN
         TSStorageManager *storageManager = [TSStorageManager sharedManager];
         NSString *recipientId = messageEnvelope.source;
         int deviceId = messageEnvelope.sourceDevice;
+        dispatch_async([OWSDispatch sessionStoreQueue], ^{
+            if (![storageManager containsSession:recipientId deviceId:deviceId]) {
+                [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+                    TSErrorMessage *errorMessage =
+                        [TSErrorMessage missingSessionWithEnvelope:messageEnvelope withTransaction:transaction];
+                    [errorMessage saveWithTransaction:transaction];
+                }];
+                return;
+            }
 
-        if (![storageManager containsSession:recipientId deviceId:deviceId]) {
-            [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-                TSErrorMessage *errorMessage =
-                    [TSErrorMessage missingSessionWithEnvelope:messageEnvelope withTransaction:transaction];
-                [errorMessage saveWithTransaction:transaction];
-            }];
-            return;
-        }
+            // DEPRECATED - Remove after all clients have been upgraded.
+            NSData *encryptedData
+                = messageEnvelope.hasContent ? messageEnvelope.content : messageEnvelope.legacyMessage;
+            if (!encryptedData) {
+                DDLogError(@"Skipping message envelope which had no encrypted data");
+                return;
+            }
 
-        // DEPRECATED - Remove after all clients have been upgraded.
-        NSData *encryptedData = messageEnvelope.hasContent ? messageEnvelope.content : messageEnvelope.legacyMessage;
-        if (!encryptedData) {
-            DDLogError(@"Skipping message envelope which had no encrypted data");
-            return;
-        }
-
-        dispatch_async([OWSDispatch sessionCipher], ^{
             NSData *plaintextData;
 
             @try {
@@ -249,7 +300,7 @@ NS_ASSUME_NONNULL_BEGIN
             return;
         }
 
-        dispatch_async([OWSDispatch sessionCipher], ^{
+        dispatch_async([OWSDispatch sessionStoreQueue], ^{
             NSData *plaintextData;
             @try {
                 // Check whether we need to refresh our PreKeys every time we receive a PreKeyWhisperMessage.
@@ -466,37 +517,42 @@ NS_ASSUME_NONNULL_BEGIN
     } else if (syncMessage.hasRequest) {
         if (syncMessage.request.type == OWSSignalServiceProtosSyncMessageRequestTypeContacts) {
             DDLogInfo(@"%@ Received request `Contacts` syncMessage.", self.tag);
-
+            
             OWSSyncContactsMessage *syncContactsMessage =
-                [[OWSSyncContactsMessage alloc] initWithContactsManager:self.contactsManager];
-
+            [[OWSSyncContactsMessage alloc] initWithContactsManager:self.contactsManager];
+            
             [self.messageSender sendTemporaryAttachmentData:[syncContactsMessage buildPlainTextAttachmentData]
-                contentType:OWSMimeTypeApplicationOctetStream
-                inMessage:syncContactsMessage
-                success:^{
-                    DDLogInfo(@"%@ Successfully sent Contacts response syncMessage.", self.tag);
-                }
-                failure:^(NSError *error) {
-                    DDLogError(@"%@ Failed to send Contacts response syncMessage with error: %@", self.tag, error);
-                }];
-
+                                                contentType:OWSMimeTypeApplicationOctetStream
+                                                  inMessage:syncContactsMessage
+                                                    success:^{
+                                                        DDLogInfo(@"%@ Successfully sent Contacts response syncMessage.", self.tag);
+                                                    }
+                                                    failure:^(NSError *error) {
+                                                        DDLogError(@"%@ Failed to send Contacts response syncMessage with error: %@", self.tag, error);
+                                                    }];
+            
         } else if (syncMessage.request.type == OWSSignalServiceProtosSyncMessageRequestTypeGroups) {
             DDLogInfo(@"%@ Received request `groups` syncMessage.", self.tag);
-
+            
             OWSSyncGroupsMessage *syncGroupsMessage = [[OWSSyncGroupsMessage alloc] init];
-
+            
             [self.messageSender sendTemporaryAttachmentData:[syncGroupsMessage buildPlainTextAttachmentData]
-                contentType:OWSMimeTypeApplicationOctetStream
-                inMessage:syncGroupsMessage
-                success:^{
-                    DDLogInfo(@"%@ Successfully sent Groups response syncMessage.", self.tag);
-                }
-                failure:^(NSError *error) {
-                    DDLogError(@"%@ Failed to send Groups response syncMessage with error: %@", self.tag, error);
-                }];
+                                                contentType:OWSMimeTypeApplicationOctetStream
+                                                  inMessage:syncGroupsMessage
+                                                    success:^{
+                                                        DDLogInfo(@"%@ Successfully sent Groups response syncMessage.", self.tag);
+                                                    }
+                                                    failure:^(NSError *error) {
+                                                        DDLogError(@"%@ Failed to send Groups response syncMessage with error: %@", self.tag, error);
+                                                    }];
         } else {
             DDLogWarn(@"%@ ignoring unsupported sync request message", self.tag);
         }
+    } else if (syncMessage.hasBlocked) {
+        DDLogInfo(@"%@ Received `blocked` syncMessage.", self.tag);
+        
+        NSArray<NSString *> *blockedPhoneNumbers = [syncMessage.blocked.numbers copy];
+        [_blockingManager setBlockedPhoneNumbers:blockedPhoneNumbers sendSyncMessage:NO];
     } else if (syncMessage.read.count > 0) {
         DDLogInfo(@"%@ Received %ld read receipt(s)", self.tag, (u_long)syncMessage.read.count);
 
@@ -525,7 +581,9 @@ NS_ASSUME_NONNULL_BEGIN
         }
     }];
 
-    [[TSStorageManager sharedManager] deleteAllSessionsForContact:endSessionEnvelope.source];
+    dispatch_async([OWSDispatch sessionStoreQueue], ^{
+        [[TSStorageManager sharedManager] deleteAllSessionsForContact:endSessionEnvelope.source];
+    });
 }
 
 - (void)handleExpirationTimerUpdateMessageWithEnvelope:(OWSSignalServiceProtosEnvelope *)envelope
@@ -710,7 +768,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)processException:(NSException *)exception envelope:(OWSSignalServiceProtosEnvelope *)envelope
 {
     OWSAssert([NSThread isMainThread]);
-    DDLogError(@"%@ Got exception: %@ of type: %@", self.tag, exception.description, exception.name);
+    DDLogError(@"%@ Got exception: %@ of type: %@ with reason: %@",
+        self.tag,
+        exception.description,
+        exception.name,
+        exception.reason);
     [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
       TSErrorMessage *errorMessage;
 

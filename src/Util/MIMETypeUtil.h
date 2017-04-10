@@ -4,10 +4,11 @@
 
 extern NSString *const OWSMimeTypeApplicationOctetStream;
 extern NSString *const OWSMimeTypeImagePng;
+extern NSString *const OWSMimeTypeOversizeTextMessage;
+extern NSString *const OWSMimeTypeUnknownForTests;
 
 @interface MIMETypeUtil : NSObject
 
-+ (BOOL)isSupportedMIMEType:(NSString *)contentType;
 + (BOOL)isSupportedVideoMIMEType:(NSString *)contentType;
 + (BOOL)isSupportedAudioMIMEType:(NSString *)contentType;
 + (BOOL)isSupportedImageMIMEType:(NSString *)contentType;
@@ -50,5 +51,9 @@ extern NSString *const OWSMimeTypeImagePng;
 + (NSSet<NSString *> *)supportedAudioUTITypes;
 + (NSSet<NSString *> *)supportedImageUTITypes;
 + (NSSet<NSString *> *)supportedAnimatedImageUTITypes;
+
++ (NSString *)utiTypeForMIMEType:(NSString *)mimeType;
++ (NSString *)fileExtensionForUTIType:(NSString *)utiType;
++ (NSString *)fileExtensionForMIMEType:(NSString *)mimeType;
 
 @end

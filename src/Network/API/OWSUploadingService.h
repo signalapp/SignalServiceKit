@@ -1,11 +1,18 @@
-//  Created by Michael Kirk on 10/18/16.
-//  Copyright © 2016 Open Whisper Systems. All rights reserved.
+//
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//
+
+#import "OWSMessageSender.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 @class TSOutgoingMessage;
 @class TSNetworkManager;
 @class TSAttachmentStream;
+
+extern NSString *const kAttachmentUploadProgressNotification;
+extern NSString *const kAttachmentUploadProgressKey;
+extern NSString *const kAttachmentUploadAttachmentIDKey;
 
 @interface OWSUploadingService : NSObject
 
@@ -15,7 +22,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)uploadAttachmentStream:(TSAttachmentStream *)attachmentStream
                        message:(TSOutgoingMessage *)outgoingMessage
                        success:(void (^)())successHandler
-                       failure:(void (^)(NSError *error))failureHandler;
+                       failure:(RetryableFailureHandler)failureHandler;
 
 @end
 

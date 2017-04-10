@@ -12,6 +12,8 @@
 
 NSString *const OWSMimeTypeApplicationOctetStream = @"application/octet-stream";
 NSString *const OWSMimeTypeImagePng = @"image/png";
+NSString *const OWSMimeTypeOversizeTextMessage = @"text/x-signal-plain";
+NSString *const OWSMimeTypeUnknownForTests = @"unknown/mimetype";
 
 @implementation MIMETypeUtil
 
@@ -198,11 +200,6 @@ NSString *const OWSMimeTypeImagePng = @"image/png";
     return [[self supportedBinaryDataMIMETypesToExtensionTypes] objectForKey:contentType] != nil;
 }
 
-+ (BOOL)isSupportedMIMEType:(NSString *)contentType {
-    return [self isSupportedImageMIMEType:contentType] || [self isSupportedAudioMIMEType:contentType] ||
-           [self isSupportedVideoMIMEType:contentType] || [self isSupportedAnimatedMIMEType:contentType];
-}
-
 + (BOOL)isSupportedVideoFile:(NSString *)filePath {
     return [[self supportedVideoExtensionTypesToMIMETypes] objectForKey:[filePath pathExtension]] != nil;
 }
@@ -291,6 +288,21 @@ NSString *const OWSMimeTypeImagePng = @"image/png";
         return [MIMETypeUtil filePathForAnimated:uniqueId ofMIMEType:contentType inFolder:folder];
     } else if ([self isBinaryData:contentType]) {
         return [MIMETypeUtil filePathForBinaryData:uniqueId ofMIMEType:contentType inFolder:folder];
+    } else if ([contentType isEqualToString:OWSMimeTypeOversizeTextMessage]) {
+        // We need to use a ".txt" file extension since this file extension is used
+        // by UIActivityViewController to determine which kinds of sharing are
+        // appropriate for this text.
+        // be used outside the app.
+        return [self filePathForData:uniqueId withFileExtension:@"txt" inFolder:folder];
+    } else if ([contentType isEqualToString:OWSMimeTypeUnknownForTests]) {
+        // This file extension is arbitrary - it should never be exposed to the user or
+        // be used outside the app.
+        return [self filePathForData:uniqueId withFileExtension:@"unknown" inFolder:folder];
+    }
+
+    NSString *fileExtension = [self fileExtensionForMIMEType:contentType];
+    if (fileExtension) {
+        return [self filePathForData:uniqueId withFileExtension:fileExtension inFolder:folder];
     }
 
     DDLogError(@"Got asked for path of file %@ which is unsupported", contentType);
@@ -344,6 +356,13 @@ NSString *const OWSMimeTypeImagePng = @"image/png";
         stringByAppendingPathExtension:[self getSupportedExtensionFromBinaryDataMIMEType:contentType]];
 }
 
++ (NSString *)filePathForData:(NSString *)uniqueId
+            withFileExtension:(NSString *)fileExtension
+                     inFolder:(NSString *)folder
+{
+    return [[folder stringByAppendingFormat:@"/%@", uniqueId] stringByAppendingPathExtension:fileExtension];
+}
+
 #if TARGET_OS_IPHONE
 
 + (NSString *)getSupportedImageMIMETypeFromImage:(UIImage *)image {
@@ -359,8 +378,25 @@ NSString *const OWSMimeTypeImagePng = @"image/png";
 + (NSString *)utiTypeForMIMEType:(NSString *)mimeType
 {
     CFStringRef utiType
-        = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, (__bridge CFStringRef)mimeType, NULL);
+    = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, (__bridge CFStringRef)mimeType, NULL);
     return (__bridge_transfer NSString *)utiType;
+}
+
++ (NSString *)fileExtensionForUTIType:(NSString *)utiType
+{
+    CFStringRef fileExtension
+    = UTTypeCopyPreferredTagWithClass((__bridge CFStringRef) utiType, kUTTagClassFilenameExtension);
+    return (__bridge_transfer NSString *)fileExtension;
+}
+
++ (NSString *)fileExtensionForMIMEType:(NSString *)mimeType
+{
+    NSString *utiType = [self utiTypeForMIMEType:mimeType];
+    if (!utiType) {
+        return nil;
+    }
+    NSString *fileExtension = [self fileExtensionForUTIType:utiType];
+    return fileExtension;
 }
 
 + (NSSet<NSString *> *)utiTypesForMIMETypes:(NSArray *)mimeTypes

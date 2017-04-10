@@ -47,4 +47,11 @@ NSError *OWSErrorMakeMessageSendDisabledDueToPreKeyUpdateFailuresError()
             @"Error mesage indicating that message send is disabled due to prekey update failures"));
 }
 
+NSError *OWSErrorMakeMessageSendFailedToBlockListError()
+{
+    return OWSErrorWithCodeDescription(OWSErrorCodeMessageSendFailedToBlockList,
+        NSLocalizedString(@"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_BLOCK_LIST",
+            @"Error mesage indicating that message send failed due to block list"));
+}
+
 NS_ASSUME_NONNULL_END

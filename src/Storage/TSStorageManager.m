@@ -6,6 +6,7 @@
 #import "NSData+Base64.h"
 #import "OWSAnalytics.h"
 #import "OWSDisappearingMessagesFinder.h"
+#import "OWSFailedAttachmentDownloadsJob.h"
 #import "OWSFailedMessagesJob.h"
 #import "OWSIncomingMessageFinder.h"
 #import "OWSReadReceipt.h"
@@ -128,6 +129,8 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 
             [NSException raise:TSStorageManagerExceptionNameNoDatabase format:@"Failed to initialize database."];
         }
+
+        OWSSingletonAssert();
     }
 
     return self;
@@ -205,6 +208,9 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
     [finder asyncRegisterDatabaseExtensions];
     OWSFailedMessagesJob *failedMessagesJob = [[OWSFailedMessagesJob alloc] initWithStorageManager:self];
     [failedMessagesJob asyncRegisterDatabaseExtensions];
+    OWSFailedAttachmentDownloadsJob *failedAttachmentDownloadsMessagesJob =
+        [[OWSFailedAttachmentDownloadsJob alloc] initWithStorageManager:self];
+    [failedAttachmentDownloadsMessagesJob asyncRegisterDatabaseExtensions];
 }
 
 - (void)protectSignalFiles {

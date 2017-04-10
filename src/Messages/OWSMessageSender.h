@@ -1,17 +1,26 @@
-//  Created by Michael Kirk on 10/7/16.
-//  Copyright © 2016 Open Whisper Systems. All rights reserved.
+//
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//
 
 NS_ASSUME_NONNULL_BEGIN
 
 @class ContactsUpdater;
 @class OWSUploadingService;
 @class SignalRecipient;
+@class OWSBlockingManager;
 @class TSInvalidIdentityKeySendingErrorMessage;
 @class TSNetworkManager;
 @class TSOutgoingMessage;
 @class TSStorageManager;
 @class TSThread;
 @protocol ContactsManagerProtocol;
+
+/**
+ * Useful for when you *sometimes* want to retry before giving up and calling the failure handler
+ * but *sometimes* we don't want to retry when we know it's a terminal failure, so we allow the
+ * caller to indicate this with isRetryable=NO.
+ */
+typedef void (^RetryableFailureHandler)(NSError *_Nonnull error, BOOL isRetryable);
 
 NS_SWIFT_NAME(MessageSender)
 @interface OWSMessageSender : NSObject {
@@ -23,10 +32,14 @@ NS_SWIFT_NAME(MessageSender)
     ContactsUpdater *_contactsUpdater;
 }
 
+- (instancetype)init NS_UNAVAILABLE;
+
 - (instancetype)initWithNetworkManager:(TSNetworkManager *)networkManager
                         storageManager:(TSStorageManager *)storageManager
                        contactsManager:(id<ContactsManagerProtocol>)contactsManager
                        contactsUpdater:(ContactsUpdater *)contactsUpdater;
+
+- (void)setBlockingManager:(OWSBlockingManager *)blockingManager;
 
 /**
  * Send and resend text messages or resend messages with existing attachments.

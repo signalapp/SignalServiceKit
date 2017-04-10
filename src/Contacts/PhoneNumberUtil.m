@@ -5,7 +5,6 @@
 #import "PhoneNumberUtil.h"
 #import "ContactsManagerProtocol.h"
 #import "FunctionalUtil.h"
-#import "TextSecureKitEnv.h"
 #import "Util.h"
 
 @implementation PhoneNumberUtil
@@ -24,72 +23,134 @@
 
     if (self) {
         _nbPhoneNumberUtil = [[NBPhoneNumberUtil alloc] init];
+
+        OWSSingletonAssert();
     }
 
     return self;
 }
 
 // country code -> country name
-+ (NSString *)countryNameFromCountryCode:(NSString *)code {
-    NSDictionary *countryCodeComponent = @{NSLocaleCountryCode : code};
++ (NSString *)countryNameFromCountryCode:(NSString *)countryCode {
+    NSDictionary *countryCodeComponent = @{NSLocaleCountryCode : countryCode};
     NSString *identifier               = [NSLocale localeIdentifierFromComponents:countryCodeComponent];
     NSString *country                  = [NSLocale.currentLocale displayNameForKey:NSLocaleIdentifier value:identifier];
     return country;
 }
 
 // country code -> calling code
-+ (NSString *)callingCodeFromCountryCode:(NSString *)code {
-    NSNumber *callingCode = [[[self sharedUtil] nbPhoneNumberUtil] getCountryCodeForRegion:code];
-    return [NSString stringWithFormat:@"%@%@", COUNTRY_CODE_PREFIX, callingCode];
++ (NSString *)callingCodeFromCountryCode:(NSString *)countryCode
+{
+    if ([countryCode isEqualToString:@"AQ"]) {
+        // Antarctica
+        return @"+672";
+    } else if ([countryCode isEqualToString:@"BV"]) {
+        // Bouvet Island
+        return @"+55";
+    } else if ([countryCode isEqualToString:@"IC"]) {
+        // Canary Islands
+        return @"+34";
+    } else if ([countryCode isEqualToString:@"EA"]) {
+        // Ceuta & Melilla
+        return @"+34";
+    } else if ([countryCode isEqualToString:@"CP"]) {
+        // Clipperton Island
+        //
+        // This country code should be filtered - it does not appear to have a calling code.
+        return nil;
+    } else if ([countryCode isEqualToString:@"DG"]) {
+        // Diego Garcia
+        return @"+246";
+    } else if ([countryCode isEqualToString:@"TF"]) {
+        // French Southern Territories
+        return @"+262";
+    } else if ([countryCode isEqualToString:@"HM"]) {
+        // Heard & McDonald Islands
+        return @"+672";
+    } else if ([countryCode isEqualToString:@"XK"]) {
+        // Kosovo
+        return @"+383";
+    } else if ([countryCode isEqualToString:@"PN"]) {
+        // Pitcairn Islands
+        return @"+64";
+    } else if ([countryCode isEqualToString:@"GS"]) {
+        // So. Georgia & So. Sandwich Isl.
+        return @"+500";
+    } else if ([countryCode isEqualToString:@"UM"]) {
+        // U.S. Outlying Islands
+        return @"+1";
+    }
+
+    NSString *callingCode = [NSString stringWithFormat:@"%@%@",
+                                      COUNTRY_CODE_PREFIX,
+                                      [[[self sharedUtil] nbPhoneNumberUtil] getCountryCodeForRegion:countryCode]];
+    return callingCode;
+}
+
++ (NSArray *)countryCodesFromCallingCode:(NSString *)callingCode {
+    NSMutableArray *countryCodes = [NSMutableArray new];
+    for (NSString *countryCode in NSLocale.ISOCountryCodes) {
+        NSString *callingCodeForCountryCode = [self callingCodeFromCountryCode:countryCode];
+        if ([callingCode isEqualToString:callingCodeForCountryCode]) {
+            [countryCodes addObject:countryCode];
+        }
+    }
+    return countryCodes;
+}
+
++ (BOOL)name:(NSString *)nameString matchesQuery:(NSString *)queryString {
+    NSCharacterSet *whitespaceSet = NSCharacterSet.whitespaceCharacterSet;
+    NSArray *queryStrings         = [queryString componentsSeparatedByCharactersInSet:whitespaceSet];
+    NSArray *nameStrings          = [nameString componentsSeparatedByCharactersInSet:whitespaceSet];
+
+    return [queryStrings all:^int(NSString *query) {
+        if (query.length == 0)
+            return YES;
+        return [nameStrings any:^int(NSString *nameWord) {
+            NSStringCompareOptions searchOpts = NSCaseInsensitiveSearch | NSAnchoredSearch;
+            return [nameWord rangeOfString:query options:searchOpts].location != NSNotFound;
+        }];
+    }];
 }
 
 // search term -> country codes
 + (NSArray *)countryCodesForSearchTerm:(NSString *)searchTerm {
+    searchTerm = [searchTerm stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+
     NSArray *countryCodes = NSLocale.ISOCountryCodes;
 
-    if (searchTerm) {
-        countryCodes = [countryCodes filter:^int(NSString *code) {
-          NSString *countryName = [self countryNameFromCountryCode:code];
-          NSString *callingCode = [self callingCodeFromCountryCode:code];
+    countryCodes = [countryCodes filter:^int(NSString *countryCode) {
+        NSString *countryName = [self countryNameFromCountryCode:countryCode];
+        NSString *callingCode = [self callingCodeFromCountryCode:countryCode];
 
-          if ([[[TextSecureKitEnv sharedEnv].contactsManager class] name:countryName matchesQuery:searchTerm]) {
-              return YES;
-          }
+        if (countryName.length < 1 || callingCode.length < 1 || [callingCode isEqualToString:@"+0"]) {
+            // Filter out countries without a valid calling code.
+            return NO;
+        }
 
-          // We rely on the already internationalized string; as that is what
-          // the user would see entered (i.e. with COUNTRY_CODE_PREFIX).
+        if (searchTerm.length < 1) {
+            return YES;
+        }
 
-          if ([callingCode containsString:searchTerm]) {
-              return YES;
-          }
-          return NO;
-        }];
-    }
+        if ([self name:countryName matchesQuery:searchTerm]) {
+            return YES;
+        }
 
-    return [self sortedCountryCodesByName:countryCodes];
-}
+        if ([self name:countryCode matchesQuery:searchTerm]) {
+            return YES;
+        }
 
-+ (NSArray *)validCountryCallingPrefixes:(NSString *)string {
-    NSArray *countryCodes = NSLocale.ISOCountryCodes;
-    NSArray *matches      = [countryCodes filter:^int(NSString *code) {
-      NSString *callingCode = [self callingCodeFromCountryCode:code];
+        // We rely on the already internationalized string; as that is what
+        // the user would see entered (i.e. with COUNTRY_CODE_PREFIX).
 
-      return [string hasPrefix:callingCode];
+        if ([callingCode containsString:searchTerm]) {
+            return YES;
+        }
+
+        return NO;
     }];
 
-    return [matches sortedArrayWithOptions:NSSortConcurrent
-                           usingComparator:^NSComparisonResult(NSString *obj1, NSString *obj2) {
-                             if (obj1 == nil) {
-                                 return obj2 ? NSOrderedAscending : NSOrderedSame;
-                             }
-
-                             if (obj2 == nil) {
-                                 return NSOrderedDescending;
-                             }
-
-                             NSInteger d = (NSInteger)[obj1 length] - (NSInteger)[obj2 length];
-                             return d ? (d < 0 ? NSOrderedAscending : NSOrderedDescending) : NSOrderedSame;
-                           }];
+    return [self sortedCountryCodesByName:countryCodes];
 }
 
 + (NSArray *)sortedCountryCodesByName:(NSArray *)countryCodesByISOCode {
