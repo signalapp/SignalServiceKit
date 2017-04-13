@@ -90,6 +90,8 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
 {
     OWSAssert([UIApplication sharedApplication].applicationState == UIApplicationStateActive);
 
+    DDLogError(@"---- checkPreKeysIfNecessary");
+
     // Update the prekey check timestamp.
     dispatch_async(TSPreKeyManager.prekeyQueue, ^{
         BOOL shouldCheck = (lastPreKeyCheckTimestamp == nil
@@ -107,6 +109,8 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
                         success:(void (^)())successHandler
                         failure:(void (^)(NSError *error))failureHandler
 {
+    DDLogError(@"---- registerPreKeysWithMode");
+
     // We use prekeyQueue to serialize this logic and ensure that only
     // one thread is "registering" or "clearing" prekeys at a time.
     dispatch_async(TSPreKeyManager.prekeyQueue, ^{
@@ -181,6 +185,8 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
 }
 
 + (void)refreshPreKeys {
+    DDLogError(@"---- refreshPreKeys");
+
     // We want to update prekeys if either the one-time or signed prekeys need an update, so
     // we check the status of both.
     //
