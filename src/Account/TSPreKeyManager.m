@@ -90,18 +90,34 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
 {
     OWSAssert([UIApplication sharedApplication].applicationState == UIApplicationStateActive);
 
-    DDLogError(@"---- checkPreKeysIfNecessary");
+    [[TSAccountManager sharedInstance] ifRegistered:YES
+                                           runAsync:^{
+                                               [TSPreKeyManager checkPreKeysIfNecessaryRegistered];
+                                           }];
+}
 
-    // Update the prekey check timestamp.
-    dispatch_async(TSPreKeyManager.prekeyQueue, ^{
+<<<<<<< Updated upstream
+DDLogError(@"---- checkPreKeysIfNecessary");
+
+||||||| merged common ancestors
+=======
++ (void)checkPreKeysIfNecessaryRegistered
+{
+>>>>>>> Stashed changes
+// Update the prekey check timestamp.
+dispatch_async(
+    TSPreKeyManager.prekeyQueue, ^{
         BOOL shouldCheck = (lastPreKeyCheckTimestamp == nil
             || fabs([lastPreKeyCheckTimestamp timeIntervalSinceNow]) >= kPreKeyCheckFrequencySeconds);
-        if (shouldCheck) {
-            [[TSAccountManager sharedInstance] ifRegistered:YES
-                                                   runAsync:^{
-                                                       [TSPreKeyManager refreshPreKeys];
-                                                   }];
+        if (!shouldCheck) {
+            return;
         }
+
+        // Optimistically update the prekey check timestamp to de-bounce
+        // refreshes.
+        lastPreKeyCheckTimestamp = [NSDate date];
+
+        [TSPreKeyManager refreshPreKeys];
     });
 }
 
@@ -157,6 +173,9 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
 
                 // Mark signed prekey as accepted by service.
                 [signedPreKey markAsAcceptedByService];
+                // Re-persist the new signed key since we have marked it
+                // as accepted.
+                [storageManager storeSignedPreKey:signedPreKey.Id signedPreKeyRecord:signedPreKey];
 
                 // On success, update the "current" signed prekey state.
                 [storageManager setCurrentSignedPrekeyId:signedPreKey.Id];
@@ -247,11 +266,6 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
                     DDLogDebug(@"%@ Not updating prekeys.", self.tag);
                 }
             }
-            
-            // Update the prekey check timestamp on success.
-            dispatch_async(TSPreKeyManager.prekeyQueue, ^{
-                lastPreKeyCheckTimestamp = [NSDate date];
-            });
 
             if (!didUpdatePreKeys) {
                 // If we didn't update the prekeys, our local "current signed key" state should
@@ -283,6 +297,10 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
         }
         failure:^(NSURLSessionDataTask *task, NSError *error) {
             DDLogError(@"%@ Failed to retrieve the number of available prekeys.", self.tag);
+            // Update the prekey check timestamp on success.
+            dispatch_async(TSPreKeyManager.prekeyQueue, ^{
+                lastPreKeyCheckTimestamp = nil;
+            });
         }];
 }
 
