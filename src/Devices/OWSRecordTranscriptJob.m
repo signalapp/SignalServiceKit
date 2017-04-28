@@ -1,13 +1,15 @@
-//  Created by Michael Kirk on 9/23/16.
-//  Copyright © 2016 Open Whisper Systems. All rights reserved.
+//
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//
 
 #import "OWSRecordTranscriptJob.h"
 #import "OWSAttachmentsProcessor.h"
 #import "OWSDisappearingMessagesJob.h"
 #import "OWSIncomingSentMessageTranscript.h"
 #import "OWSMessageSender.h"
+#import "TSInfoMessage.h"
 #import "TSOutgoingMessage.h"
-#import "TSStorageManager.h"
+#import "TSStorageManager+SessionStore.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -16,6 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) OWSIncomingSentMessageTranscript *incomingSentMessageTranscript;
 @property (nonatomic, readonly) OWSMessageSender *messageSender;
 @property (nonatomic, readonly) TSNetworkManager *networkManager;
+@property (nonatomic, readonly) TSStorageManager *storageManager;
 
 @end
 
@@ -33,6 +36,7 @@ NS_ASSUME_NONNULL_BEGIN
     _incomingSentMessageTranscript = incomingSentMessageTranscript;
     _messageSender = messageSender;
     _networkManager = networkManager;
+    _storageManager = [TSStorageManager sharedManager];
 
     return self;
 }
@@ -41,6 +45,18 @@ NS_ASSUME_NONNULL_BEGIN
 {
     OWSIncomingSentMessageTranscript *transcript = self.incomingSentMessageTranscript;
     DDLogDebug(@"%@ Recording transcript: %@", self.tag, transcript);
+
+    if (transcript.isEndSessionMessage) {
+        DDLogInfo(@"%@ EndSession was sent to recipient: %@.", self.tag, transcript.recipientId);
+        [self.storageManager deleteAllSessionsForContact:transcript.recipientId];
+        [[[TSInfoMessage alloc] initWithTimestamp:transcript.timestamp
+                                         inThread:transcript.thread
+                                      messageType:TSInfoMessageTypeSessionDidEnd] save];
+
+        // Don't continue processing lest we print a bubble for the session reset.
+        return;
+    }
+
     TSThread *thread = transcript.thread;
     OWSAttachmentsProcessor *attachmentsProcessor =
         [[OWSAttachmentsProcessor alloc] initWithAttachmentProtos:transcript.attachmentPointerProtos
@@ -85,8 +101,8 @@ NS_ASSUME_NONNULL_BEGIN
                                                                         attachmentIds:[NSMutableArray new]
                                                                      expiresInSeconds:transcript.expirationDuration
                                                                       expireStartedAt:transcript.expirationStartedAt];
-        textMessage.messageState = TSOutgoingMessageStateDelivered;
-        [textMessage save];
+        // Since textMessage is a new message, updateWithWasSentAndDelivered will save it.
+        [textMessage updateWithWasSentAndDelivered];
     }
 }
 

@@ -24,36 +24,27 @@ extern NSString *const OWSMimeTypeUnknownForTests;
 + (NSString *)getSupportedExtensionFromImageMIMEType:(NSString *)supportedMIMEType;
 + (NSString *)getSupportedExtensionFromAnimatedMIMEType:(NSString *)supportedMIMEType;
 
-+ (NSString *)getSupportedMIMETypeFromVideoFile:(NSString *)supportedVideoFile;
-+ (NSString *)getSupportedMIMETypeFromAudioFile:(NSString *)supportedAudioFile;
-+ (NSString *)getSupportedMIMETypeFromImageFile:(NSString *)supportedImageFile;
-+ (NSString *)getSupportedMIMETypeFromAnimatedFile:(NSString *)supportedImageFile;
-
 + (BOOL)isAnimated:(NSString *)contentType;
 + (BOOL)isImage:(NSString *)contentType;
 + (BOOL)isVideo:(NSString *)contentType;
 + (BOOL)isAudio:(NSString *)contentType;
 
-+ (NSString *)filePathForAttachment:(NSString *)uniqueId ofMIMEType:(NSString *)contentType inFolder:(NSString *)folder;
-+ (NSString *)filePathForImage:(NSString *)uniqueId ofMIMEType:(NSString *)contentType inFolder:(NSString *)folder;
-+ (NSString *)filePathForVideo:(NSString *)uniqueId ofMIMEType:(NSString *)contentType inFolder:(NSString *)folder;
-+ (NSString *)filePathForAudio:(NSString *)uniqueId ofMIMEType:(NSString *)contentType inFolder:(NSString *)folder;
-+ (NSString *)filePathForAnimated:(NSString *)uniqueId ofMIMEType:(NSString *)contentType inFolder:(NSString *)folder;
+// filename is optional and should not be trusted.
++ (NSString *)filePathForAttachment:(NSString *)uniqueId
+                         ofMIMEType:(NSString *)contentType
+                           filename:(nullable NSString *)filename
+                           inFolder:(NSString *)folder;
 
 + (NSURL *)simLinkCorrectExtensionOfFile:(NSURL *)mediaURL ofMIMEType:(NSString *)contentType;
-
-#if TARGET_OS_IPHONE
-+ (NSString *)getSupportedImageMIMETypeFromImage:(UIImage *)image;
-+ (BOOL)getIsSupportedTypeFromImage:(UIImage *)image;
-#endif
 
 + (NSSet<NSString *> *)supportedVideoUTITypes;
 + (NSSet<NSString *> *)supportedAudioUTITypes;
 + (NSSet<NSString *> *)supportedImageUTITypes;
 + (NSSet<NSString *> *)supportedAnimatedImageUTITypes;
 
-+ (NSString *)utiTypeForMIMEType:(NSString *)mimeType;
-+ (NSString *)fileExtensionForUTIType:(NSString *)utiType;
-+ (NSString *)fileExtensionForMIMEType:(NSString *)mimeType;
++ (nullable NSString *)utiTypeForMIMEType:(NSString *)mimeType;
++ (nullable NSString *)utiTypeForFileExtension:(NSString *)fileExtension;
++ (nullable NSString *)fileExtensionForUTIType:(NSString *)utiType;
++ (nullable NSString *)fileExtensionForMIMEType:(NSString *)mimeType;
 
 @end

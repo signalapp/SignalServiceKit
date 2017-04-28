@@ -12,7 +12,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @implementation TSAttachmentStream
 
-- (instancetype)initWithContentType:(NSString *)contentType
+- (instancetype)initWithContentType:(NSString *)contentType filename:(NSString *)filename
 {
     self = [super initWithContentType:contentType];
     if (!self) {
@@ -24,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
     // state, but this constructor is used only for new outgoing
     // attachments which haven't been uploaded yet.
     _isUploaded = NO;
+    _filename = filename;
 
     return self;
 }
@@ -42,6 +43,7 @@ NS_ASSUME_NONNULL_BEGIN
     // state, but this constructor is used only for new incoming
     // attachments which don't need to be uploaded.
     _isUploaded = YES;
+    _filename = pointer.filename;
 
     return self;
 }
@@ -115,6 +117,7 @@ NS_ASSUME_NONNULL_BEGIN
 {
     return [MIMETypeUtil filePathForAttachment:self.uniqueId
                                     ofMIMEType:self.contentType
+                                      filename:self.filename
                                       inFolder:[[self class] attachmentsFolder]];
 }
 

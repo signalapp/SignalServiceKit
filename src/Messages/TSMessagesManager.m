@@ -153,8 +153,19 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 - (void)handleReceivedEnvelope:(OWSSignalServiceProtosEnvelope *)envelope
+                    completion:(nullable MessageManagerCompletionBlock)completionHandler
 {
     OWSAssert([NSThread isMainThread]);
+
+    // Ensure that completionHandler is called on the main thread,
+    // and handle the nil case.
+    MessageManagerCompletionBlock completion = ^{
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (completionHandler) {
+                completionHandler();
+            }
+        });
+    };
 
     DDLogInfo(@"%@ received envelope: %@", self.tag, [self descriptionForEnvelope:envelope]);
 
@@ -162,6 +173,7 @@ NS_ASSUME_NONNULL_BEGIN
     BOOL isEnvelopeBlocked = [_blockingManager.blockedPhoneNumbers containsObject:envelope.source];
     if (isEnvelopeBlocked) {
         DDLogInfo(@"%@ ignoring blocked envelope: %@", self.tag, envelope.source);
+        completion();
         return;
     }
 
@@ -175,8 +187,10 @@ NS_ASSUME_NONNULL_BEGIN
                                             DDLogError(
                                                 @"%@ handling secure message failed with error: %@", self.tag, error);
                                         }
+                                        completion();
                                     }];
-                break;
+                // Return to avoid double-acknowledging.
+                return;
             }
             case OWSSignalServiceProtosEnvelopeTypePrekeyBundle: {
                 [self handlePreKeyBundleAsync:envelope
@@ -186,8 +200,10 @@ NS_ASSUME_NONNULL_BEGIN
                                            DDLogError(
                                                @"%@ handling pre-key bundle failed with error: %@", self.tag, error);
                                        }
+                                       completion();
                                    }];
-                break;
+                // Return to avoid double-acknowledging.
+                return;
             }
             case OWSSignalServiceProtosEnvelopeTypeReceipt:
                 DDLogInfo(@"Received a delivery receipt");
@@ -207,8 +223,10 @@ NS_ASSUME_NONNULL_BEGIN
                 break;
         }
     } @catch (NSException *exception) {
-        DDLogWarn(@"Received an incorrectly formatted protocol buffer: %@", exception.debugDescription);
+        DDLogError(@"Received an incorrectly formatted protocol buffer: %@", exception.debugDescription);
     }
+
+    completion();
 }
 
 - (void)handleDeliveryReceipt:(OWSSignalServiceProtosEnvelope *)envelope
@@ -219,9 +237,7 @@ NS_ASSUME_NONNULL_BEGIN
             [TSInteraction interactionForTimestamp:envelope.timestamp withTransaction:transaction];
         if ([interaction isKindOfClass:[TSOutgoingMessage class]]) {
             TSOutgoingMessage *outgoingMessage = (TSOutgoingMessage *)interaction;
-            outgoingMessage.messageState = TSOutgoingMessageStateDelivered;
-
-            [outgoingMessage saveWithTransaction:transaction];
+            [outgoingMessage updateWithWasDeliveredWithTransaction:transaction];
         }
     }];
 }
@@ -241,6 +257,8 @@ NS_ASSUME_NONNULL_BEGIN
                         [TSErrorMessage missingSessionWithEnvelope:messageEnvelope withTransaction:transaction];
                     [errorMessage saveWithTransaction:transaction];
                 }];
+                DDLogError(@"Skipping message envelope for unknown session.");
+                completion(nil);
                 return;
             }
 
@@ -248,7 +266,16 @@ NS_ASSUME_NONNULL_BEGIN
             NSData *encryptedData
                 = messageEnvelope.hasContent ? messageEnvelope.content : messageEnvelope.legacyMessage;
             if (!encryptedData) {
-                DDLogError(@"Skipping message envelope which had no encrypted data");
+                DDLogError(@"Skipping message envelope which had no encrypted data.");
+                completion(nil);
+                return;
+            }
+
+            NSUInteger kMaxEncryptedDataLength = 250 * 1024;
+            if (encryptedData.length > kMaxEncryptedDataLength) {
+                DDLogError(@"Skipping message envelope with oversize encrypted data: %lu.",
+                    (unsigned long)encryptedData.length);
+                completion(nil);
                 return;
             }
 
@@ -297,6 +324,7 @@ NS_ASSUME_NONNULL_BEGIN
         NSData *encryptedData = preKeyEnvelope.hasContent ? preKeyEnvelope.content : preKeyEnvelope.legacyMessage;
         if (!encryptedData) {
             DDLogError(@"Skipping message envelope which had no encrypted data");
+            completion(nil);
             return;
         }
 
@@ -304,7 +332,7 @@ NS_ASSUME_NONNULL_BEGIN
             NSData *plaintextData;
             @try {
                 // Check whether we need to refresh our PreKeys every time we receive a PreKeyWhisperMessage.
-                [TSPreKeyManager refreshPreKeys];
+                [TSPreKeyManager checkPreKeys];
 
                 PreKeyWhisperMessage *message = [[PreKeyWhisperMessage alloc] initWithData:encryptedData];
                 SessionCipher *cipher = [[SessionCipher alloc] initWithSessionStore:storageManager
@@ -327,6 +355,7 @@ NS_ASSUME_NONNULL_BEGIN
 
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self handleEnvelope:preKeyEnvelope plaintextData:plaintextData];
+                completion(nil);
             });
         });
     }
@@ -383,21 +412,21 @@ NS_ASSUME_NONNULL_BEGIN
         }];
         if (ignoreMessage) {
             // FIXME: https://github.com/WhisperSystems/Signal-iOS/issues/1340
-            DDLogDebug(@"%@ Received message from group that I left or don't know about, ignoring", self.tag);
+            DDLogInfo(@"%@ Received message from group that I left or don't know about, ignoring", self.tag);
             return;
         }
     }
     if ((dataMessage.flags & OWSSignalServiceProtosDataMessageFlagsEndSession) != 0) {
-        DDLogVerbose(@"%@ Received end session message", self.tag);
+        DDLogInfo(@"%@ Received end session message", self.tag);
         [self handleEndSessionMessageWithEnvelope:incomingEnvelope dataMessage:dataMessage];
     } else if ((dataMessage.flags & OWSSignalServiceProtosDataMessageFlagsExpirationTimerUpdate) != 0) {
-        DDLogVerbose(@"%@ Received expiration timer update message", self.tag);
+        DDLogInfo(@"%@ Received expiration timer update message", self.tag);
         [self handleExpirationTimerUpdateMessageWithEnvelope:incomingEnvelope dataMessage:dataMessage];
     } else if (dataMessage.attachments.count > 0) {
-        DDLogVerbose(@"%@ Received media message attachment", self.tag);
+        DDLogInfo(@"%@ Received media message attachment", self.tag);
         [self handleReceivedMediaWithEnvelope:incomingEnvelope dataMessage:dataMessage];
     } else {
-        DDLogVerbose(@"%@ Received data message.", self.tag);
+        DDLogInfo(@"%@ Received data message.", self.tag);
         [self handleReceivedTextMessageWithEnvelope:incomingEnvelope dataMessage:dataMessage];
         if ([self isDataMessageGroupAvatarUpdate:dataMessage]) {
             DDLogVerbose(@"%@ Data message had group avatar attachment", self.tag);

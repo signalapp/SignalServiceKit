@@ -94,10 +94,10 @@ NS_ASSUME_NONNULL_BEGIN
         failure(OWSErrorWithCodeDescription(OWSErrorCodeInvalidMethodParameters, @"Cannot lookup zero identifiers"));
         return;
     }
-    
+
     [self contactIntersectionWithSet:[NSSet setWithArray:identifiers]
                              success:^(NSSet<NSString *> *_Nonnull matchedIds) {
-                                 if (matchedIds.count == 1) {
+                                 if (matchedIds.count > 0) {
                                      NSMutableArray<SignalRecipient *> *recipients = [NSMutableArray new];
                                      for (NSString *identifier in matchedIds) {
                                          [recipients addObject:[SignalRecipient recipientWithTextSecureIdentifier:identifier]];
@@ -192,17 +192,12 @@ NS_ASSUME_NONNULL_BEGIN
                       [SignalRecipient recipientWithTextSecureIdentifier:identifier withTransaction:transaction];
                   if (!recipient) {
                       recipient = [[SignalRecipient alloc] initWithTextSecureIdentifier:identifier
-                                                                                  relay:nil
-                                                                          supportsVoice:NO
-                                                                         supportsWebRTC:NO];
+                                                                                  relay:nil];
                   }
 
                   NSDictionary *attributes = [attributesForIdentifier objectForKey:identifier];
 
                   recipient.relay = attributes[@"relay"];
-                  recipient.supportsVoice = [attributes[@"voice"] boolValue];
-                  // The key for the "supports WebRTC audio/video" property is "video".
-                  recipient.supportsWebRTC = [attributes[@"video"] boolValue];
 
                   [recipient saveWithTransaction:transaction];
               }
@@ -211,7 +206,13 @@ NS_ASSUME_NONNULL_BEGIN
             success([NSSet setWithArray:attributesForIdentifier.allKeys]);
           }
           failure:^(NSURLSessionDataTask *task, NSError *error) {
-            failure(error);
+              NSHTTPURLResponse *response = (NSHTTPURLResponse *)task.response;
+              if (response.statusCode == 413) {
+                  failure(OWSErrorWithCodeDescription(
+                      OWSErrorCodeContactsUpdaterRateLimit, OWSSignalServiceKitErrorDomain));
+              } else {
+                  failure(error);
+              }
           }];
     });
 }
