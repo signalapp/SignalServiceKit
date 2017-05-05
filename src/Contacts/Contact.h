@@ -1,7 +1,25 @@
+//
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//
+
 #import <AddressBook/AddressBook.h>
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
+
+typedef NS_ENUM(NSUInteger, OWSPhoneNumberType) {
+    OWSPhoneNumberTypeUnknown,
+    OWSPhoneNumberTypeMobile,
+    OWSPhoneNumberTypeIPhone,
+    OWSPhoneNumberTypeMain,
+    OWSPhoneNumberTypeHomeFAX,
+    OWSPhoneNumberTypeWorkFAX,
+    OWSPhoneNumberTypeOtherFAX,
+    OWSPhoneNumberTypePager,
+    OWSPhoneNumberTypeHome,
+    OWSPhoneNumberTypeWork,
+    OWSPhoneNumberTypeOther
+};
 
 /**
  *
@@ -13,6 +31,8 @@ NS_ASSUME_NONNULL_BEGIN
 @class CNContact;
 @class PhoneNumber;
 @class UIImage;
+@class SignalRecipient;
+@class YapDatabaseReadTransaction;
 
 @interface Contact : NSObject
 
@@ -32,6 +52,8 @@ NS_ASSUME_NONNULL_BEGIN
 #endif // TARGET_OS_IOS
 
 - (BOOL)isSignalContact;
+- (NSArray<SignalRecipient *> *)signalRecipientsWithTransaction:(YapDatabaseReadTransaction *)transaction;
+// TODO: Remove this method.
 - (NSArray<NSString *> *)textSecureIdentifiers;
 
 #if TARGET_OS_IOS
@@ -39,10 +61,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithContactWithFirstName:(nullable NSString *)firstName
                                  andLastName:(nullable NSString *)lastName
                      andUserTextPhoneNumbers:(NSArray<NSString *> *)phoneNumbers
+                          phoneNumberTypeMap:(nullable NSDictionary<NSString *, NSNumber *> *)phoneNumberTypeMap
                                     andImage:(nullable UIImage *)image
                                 andContactID:(ABRecordID)record;
 
-- (instancetype)initWithContact:(CNContact *)contact;
+- (instancetype)initWithSystemContact:(CNContact *)contact;
+
+- (OWSPhoneNumberType)phoneNumberTypeForPhoneNumber:(NSString *)recipientId;
 
 #endif // TARGET_OS_IOS
 
