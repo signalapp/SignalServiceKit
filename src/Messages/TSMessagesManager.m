@@ -481,17 +481,16 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssert([NSThread isMainThread]);
 
     if (dataMessage.hasGroup) {
-        __block BOOL ignoreMessage = NO;
+        __block BOOL unknownGroup = NO;
         [self.dbConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
             TSGroupModel *emptyModelToFillOutId =
                 [[TSGroupModel alloc] initWithTitle:nil memberIds:nil image:nil groupId:dataMessage.group.id];
             TSGroupThread *gThread = [TSGroupThread threadWithGroupModel:emptyModelToFillOutId transaction:transaction];
             if (gThread == nil && dataMessage.group.type != OWSSignalServiceProtosGroupContextTypeUpdate) {
-                ignoreMessage = YES;
+                unknownGroup = YES;
             }
         }];
-        if (ignoreMessage) {
-            // FIXME: https://github.com/WhisperSystems/Signal-iOS/issues/1340
+        if (unknownGroup) {
             DDLogInfo(@"%@ Received message from group that I left or don't know about from: %@.",
                 self.tag,
                 incomingEnvelope.source);
@@ -516,7 +515,7 @@ NS_ASSUME_NONNULL_BEGIN
                     DDLogError(@"%@ Failed to send Request Group Info message with error: %@", self.tag, error);
                 }];
 
-            return;
+            // Continue processing message for unknown group, otherwise we'll lose it.
         }
     }
     if ((dataMessage.flags & OWSSignalServiceProtosDataMessageFlagsEndSession) != 0) {
