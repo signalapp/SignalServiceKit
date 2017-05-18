@@ -14,7 +14,6 @@
 #import "TSThread.h"
 
 NSString *TSInboxGroup   = @"TSInboxGroup";
-NSString *TSArchiveGroup = @"TSArchiveGroup";
 
 NSString *TSUnreadIncomingMessagesGroup = @"TSUnreadIncomingMessagesGroup";
 NSString *TSSecondaryDevicesGroup = @"TSSecondaryDevicesGroup";
@@ -69,14 +68,7 @@ NSString *TSSecondaryDevicesDatabaseViewExtensionName = @"TSSecondaryDevicesData
         withObjectBlock:^NSString *(
             YapDatabaseReadTransaction *transaction, NSString *collection, NSString *key, id object) {
           if ([object isKindOfClass:[TSThread class]]) {
-              TSThread *thread = (TSThread *)object;
-              if (thread.archivalDate) {
-                  return ([self threadShouldBeInInbox:thread]) ? TSInboxGroup : TSArchiveGroup;
-              } else if (thread.archivalDate) {
-                  return TSArchiveGroup;
-              } else {
-                  return TSInboxGroup;
-              }
+              return TSInboxGroup;
           }
           return nil;
         }];
@@ -150,23 +142,21 @@ NSString *TSSecondaryDevicesDatabaseViewExtensionName = @"TSSecondaryDevicesData
 
 + (YapDatabaseViewSorting *)threadSorting {
     return [YapDatabaseViewSorting withObjectBlock:^NSComparisonResult(YapDatabaseReadTransaction *transaction,
-                                                                       NSString *group,
-                                                                       NSString *collection1,
-                                                                       NSString *key1,
-                                                                       id object1,
-                                                                       NSString *collection2,
-                                                                       NSString *key2,
-                                                                       id object2) {
-      if ([group isEqualToString:TSArchiveGroup] || [group isEqualToString:TSInboxGroup]) {
-          if ([object1 isKindOfClass:[TSThread class]] && [object2 isKindOfClass:[TSThread class]]) {
-              TSThread *thread1 = (TSThread *)object1;
-              TSThread *thread2 = (TSThread *)object2;
+        NSString *group,
+        NSString *collection1,
+        NSString *key1,
+        id object1,
+        NSString *collection2,
+        NSString *key2,
+        id object2) {
+        if ([object1 isKindOfClass:[TSThread class]] && [object2 isKindOfClass:[TSThread class]]) {
+            TSThread *thread1 = (TSThread *)object1;
+            TSThread *thread2 = (TSThread *)object2;
 
-              return [thread1.lastMessageDate compare:thread2.lastMessageDate];
-          }
-      }
+            return [thread1.lastMessageDate compare:thread2.lastMessageDate];
+        }
 
-      return NSOrderedSame;
+        return NSOrderedSame;
     }];
 }
 
