@@ -213,14 +213,10 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
     [self checkPreKeysWithMaxFrequencySeconds:kPreKeyCheckFrequencySeconds shouldDeferIfDebounced:NO];
 }
 
-+ (void)checkPreKeysWithMaxFrequencySeconds:(CGFloat)maxFrequencySeconds
++ (void)checkPreKeysWithMaxFrequencySeconds:(NSTimeInterval)maxFrequencySeconds
                      shouldDeferIfDebounced:(BOOL)shouldDeferIfDebounced
 {
     dispatch_async(TSPreKeyManager.prekeyQueue, ^{
-        TSPreKeyManager *sharedManager = self.sharedManager;
-        [sharedManager.deferredPrekeyCheckTimer invalidate];
-        sharedManager.deferredPrekeyCheckTimer = nil;
-
         BOOL shouldCheck = (lastPreKeyCheckTimestamp == nil
             || fabs([lastPreKeyCheckTimestamp timeIntervalSinceNow]) >= maxFrequencySeconds);
         if (shouldCheck) {
@@ -236,6 +232,12 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
             //       condition.
             lastPreKeyCheckTimestamp = [NSDate date];
 
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                TSPreKeyManager *sharedManager = self.sharedManager;
+                [sharedManager.deferredPrekeyCheckTimer invalidate];
+                sharedManager.deferredPrekeyCheckTimer = nil;
+            });
+
             [[TSAccountManager sharedInstance] ifRegistered:YES
                                                    runAsync:^{
                                                        [TSPreKeyManager checkPreKeys];
@@ -244,19 +246,24 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
             // If we debounce a prekey check, we should check again later.
             // This ensures that we receive a large number of PreKeyWhisperMessages,
             // we do a prekey check after we've processed them all.
-            sharedManager.deferredPrekeyCheckTimer =
-                [NSTimer weakScheduledTimerWithTimeInterval:maxFrequencySeconds
-                                                     target:sharedManager
-                                                   selector:@selector(deferredCheckPreKeysWithDebounce)
-                                                   userInfo:nil
-                                                    repeats:NO];
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                TSPreKeyManager *sharedManager = self.sharedManager;
+                [sharedManager.deferredPrekeyCheckTimer invalidate];
+                sharedManager.deferredPrekeyCheckTimer = nil;
+                sharedManager.deferredPrekeyCheckTimer =
+                    [NSTimer weakScheduledTimerWithTimeInterval:maxFrequencySeconds
+                                                         target:sharedManager
+                                                       selector:@selector(deferredCheckPreKeysWithDebounce)
+                                                       userInfo:nil
+                                                        repeats:NO];
+            });
         }
     });
 }
 
 - (void)deferredCheckPreKeysWithDebounce
 {
-    DDLogInfo(@"%@ deferredCheckPreKeysWithDebounce.", self.tag);
+    OWSAssert([NSThread isMainThread]);
 
     [self.deferredPrekeyCheckTimer invalidate];
     self.deferredPrekeyCheckTimer = nil;
