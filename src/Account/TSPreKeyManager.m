@@ -24,6 +24,13 @@ static const CGFloat kSignedPreKeyRotationTime = 2 * 24 * 60 * 60;
 // Currently we check prekey state every 12 hours.
 static const CGFloat kPreKeyCheckFrequencySeconds = 12 * 60 * 60;
 
+// How often we check prekey state in response to PreKeyWhisperMessages.
+//
+// Debounce prekey checks so that we never check more often than once
+// every 5 minutes.  This avoids unnecessary service load if we receive
+// a ton of PreKeyWhisperMessages.
+static const CGFloat kPreKeyCheckDebounceRateSeconds = 60;
+
 // We generate 100 one-time prekeys at a time.  We should replenish
 // whenever ~2/3 of them have been consumed.
 static const NSUInteger kEphemeralPreKeysMinimumCount = 35;
@@ -84,35 +91,6 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
         queue = dispatch_queue_create("org.whispersystems.signal.prekeyQueue", NULL);
     });
     return queue;
-}
-
-+ (void)checkPreKeysIfNecessary
-{
-    OWSAssert([UIApplication sharedApplication].applicationState == UIApplicationStateActive);
-
-    // Update the prekey check timestamp.
-    dispatch_async(TSPreKeyManager.prekeyQueue, ^{
-        BOOL shouldCheck = (lastPreKeyCheckTimestamp == nil
-            || fabs([lastPreKeyCheckTimestamp timeIntervalSinceNow]) >= kPreKeyCheckFrequencySeconds);
-        if (shouldCheck) {
-            // Optimistically mark the prekeys as checked. This
-            // de-bounces prekey checks.
-            //
-            // If the check or key registration fails, the prekeys
-            // will be marked as _NOT_ checked.
-            //
-            // Note: [TSPreKeyManager checkPreKeys] will also
-            //       optimistically mark them as checked. This
-            //       redundancy is fine and precludes a race
-            //       condition.
-            lastPreKeyCheckTimestamp = [NSDate date];
-
-            [[TSAccountManager sharedInstance] ifRegistered:YES
-                                                   runAsync:^{
-                                                       [TSPreKeyManager checkPreKeys];
-                                                   }];
-        }
-    });
 }
 
 + (void)registerPreKeysWithMode:(RefreshPreKeysMode)mode
@@ -199,17 +177,46 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
     });
 }
 
++ (void)checkPreKeysWithDebounce
+{
+    [self checkPreKeysWithMaxFrequencySeconds:kPreKeyCheckDebounceRateSeconds];
+}
+
++ (void)checkPreKeysIfNecessary
+{
+    OWSAssert([UIApplication sharedApplication].applicationState == UIApplicationStateActive);
+
+    [self checkPreKeysWithMaxFrequencySeconds:kPreKeyCheckFrequencySeconds];
+}
+
++ (void)checkPreKeysWithMaxFrequencySeconds:(CGFloat)maxFrequencySeconds
+{
+    dispatch_async(TSPreKeyManager.prekeyQueue, ^{
+        BOOL shouldCheck = (lastPreKeyCheckTimestamp == nil
+            || fabs([lastPreKeyCheckTimestamp timeIntervalSinceNow]) >= maxFrequencySeconds);
+        if (shouldCheck) {
+            // Optimistically mark the prekeys as checked. This
+            // de-bounces prekey checks.
+            //
+            // If the check or key registration fails, the prekeys
+            // will be marked as _NOT_ checked.
+            //
+            // Note: [TSPreKeyManager checkPreKeys] will also
+            //       optimistically mark them as checked. This
+            //       redundancy is fine and precludes a race
+            //       condition.
+            lastPreKeyCheckTimestamp = [NSDate date];
+
+            [[TSAccountManager sharedInstance] ifRegistered:YES
+                                                   runAsync:^{
+                                                       [TSPreKeyManager checkPreKeys];
+                                                   }];
+        }
+    });
+}
+
 + (void)checkPreKeys
 {
-    // Optimistically mark the prekeys as checked. This
-    // de-bounces prekey checks.
-    //
-    // If the check or key registration fails, the prekeys
-    // will be marked as _NOT_ checked.
-    dispatch_async(TSPreKeyManager.prekeyQueue, ^{
-        lastPreKeyCheckTimestamp = [NSDate date];
-    });
-
     // We want to update prekeys if either the one-time or signed prekeys need an update, so
     // we check the status of both.
     //

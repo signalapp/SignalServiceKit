@@ -26,8 +26,14 @@ typedef NS_ENUM(NSInteger, RefreshPreKeysMode) {
                         success:(void (^)())successHandler
                         failure:(void (^)(NSError *error))failureHandler;
 
-+ (void)checkPreKeys;
+// This method should be called in response to PreKeyWhisperMessages.
+//
+// It will check the the prekeys at a fast (but throttled) rate.
++ (void)checkPreKeysWithDebounce;
 
+// This method should be called in response to app activation, etc.
+//
+// It will check the the prekeys at a slow rate.
 + (void)checkPreKeysIfNecessary;
 
 @end

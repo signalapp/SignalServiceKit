@@ -409,7 +409,7 @@ NS_ASSUME_NONNULL_BEGIN
             NSData *plaintextData;
             @try {
                 // Check whether we need to refresh our PreKeys every time we receive a PreKeyWhisperMessage.
-                [TSPreKeyManager checkPreKeys];
+                [TSPreKeyManager checkPreKeysWithDebounce];
 
                 PreKeyWhisperMessage *message = [[PreKeyWhisperMessage alloc] initWithData:encryptedData];
                 SessionCipher *cipher = [[SessionCipher alloc] initWithSessionStore:storageManager
