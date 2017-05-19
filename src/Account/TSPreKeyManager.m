@@ -3,6 +3,7 @@
 //
 
 #import "TSPreKeyManager.h"
+#import "NSTimer+OWS.h"
 #import "NSURLSessionDataTask+StatusCode.h"
 #import "TSNetworkManager.h"
 #import "TSRegisterSignedPrekeyRequest.h"
@@ -50,7 +51,30 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
 
 #pragma mark -
 
+@interface TSPreKeyManager ()
+
+@property (nonatomic) NSTimer *deferredPrekeyCheckTimer;
+
+@end
+
+#pragma mark -
+
 @implementation TSPreKeyManager
+
++ (instancetype)sharedManager
+{
+    static TSPreKeyManager *sharedMyManager = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        sharedMyManager = [[self alloc] initDefault];
+    });
+    return sharedMyManager;
+}
+
+- (instancetype)initDefault
+{
+    return [super init];
+}
 
 + (BOOL)isAppLockedDueToPreKeyUpdateFailures
 {
@@ -179,19 +203,24 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
 
 + (void)checkPreKeysWithDebounce
 {
-    [self checkPreKeysWithMaxFrequencySeconds:kPreKeyCheckDebounceRateSeconds];
+    [self checkPreKeysWithMaxFrequencySeconds:kPreKeyCheckDebounceRateSeconds shouldDeferIfDebounced:YES];
 }
 
 + (void)checkPreKeysIfNecessary
 {
     OWSAssert([UIApplication sharedApplication].applicationState == UIApplicationStateActive);
 
-    [self checkPreKeysWithMaxFrequencySeconds:kPreKeyCheckFrequencySeconds];
+    [self checkPreKeysWithMaxFrequencySeconds:kPreKeyCheckFrequencySeconds shouldDeferIfDebounced:NO];
 }
 
 + (void)checkPreKeysWithMaxFrequencySeconds:(CGFloat)maxFrequencySeconds
+                     shouldDeferIfDebounced:(BOOL)shouldDeferIfDebounced
 {
     dispatch_async(TSPreKeyManager.prekeyQueue, ^{
+        TSPreKeyManager *sharedManager = self.sharedManager;
+        [sharedManager.deferredPrekeyCheckTimer invalidate];
+        sharedManager.deferredPrekeyCheckTimer = nil;
+
         BOOL shouldCheck = (lastPreKeyCheckTimestamp == nil
             || fabs([lastPreKeyCheckTimestamp timeIntervalSinceNow]) >= maxFrequencySeconds);
         if (shouldCheck) {
@@ -211,8 +240,28 @@ static const CGFloat kSignedPreKeyUpdateFailureMaxFailureDuration = 10 * 24 * 60
                                                    runAsync:^{
                                                        [TSPreKeyManager checkPreKeys];
                                                    }];
+        } else if (shouldDeferIfDebounced) {
+            // If we debounce a prekey check, we should check again later.
+            // This ensures that we receive a large number of PreKeyWhisperMessages,
+            // we do a prekey check after we've processed them all.
+            sharedManager.deferredPrekeyCheckTimer =
+                [NSTimer weakScheduledTimerWithTimeInterval:maxFrequencySeconds
+                                                     target:sharedManager
+                                                   selector:@selector(deferredCheckPreKeysWithDebounce)
+                                                   userInfo:nil
+                                                    repeats:NO];
         }
     });
+}
+
+- (void)deferredCheckPreKeysWithDebounce
+{
+    DDLogInfo(@"%@ deferredCheckPreKeysWithDebounce.", self.tag);
+
+    [self.deferredPrekeyCheckTimer invalidate];
+    self.deferredPrekeyCheckTimer = nil;
+
+    [[self class] checkPreKeysWithMaxFrequencySeconds:kPreKeyCheckDebounceRateSeconds shouldDeferIfDebounced:NO];
 }
 
 + (void)checkPreKeys

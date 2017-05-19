@@ -20,6 +20,8 @@ typedef NS_ENUM(NSInteger, RefreshPreKeysMode) {
 
 @interface TSPreKeyManager : NSObject
 
+- (instancetype)init NS_UNAVAILABLE;
+
 + (BOOL)isAppLockedDueToPreKeyUpdateFailures;
 
 + (void)registerPreKeysWithMode:(RefreshPreKeysMode)mode
