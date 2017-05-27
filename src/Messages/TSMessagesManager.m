@@ -39,8 +39,39 @@
 #import "TextSecureKitEnv.h"
 #import <AxolotlKit/AxolotlExceptions.h>
 #import <AxolotlKit/SessionCipher.h>
+#import <objc/runtime.h>
 
 NS_ASSUME_NONNULL_BEGIN
+
+NSString *const kTSStorageManager_UnknownGroupMessages = @"kTSStorageManager_UnknownGroupMessages";
+
+static void *kOWSSignalServiceProtosEnvelope_WasGroupMessageStored
+    = &kOWSSignalServiceProtosEnvelope_WasGroupMessageStored;
+
+@interface OWSSignalServiceProtosEnvelope (TSMessagesManager)
+
+@end
+
+#pragma mark -
+
+@implementation OWSSignalServiceProtosEnvelope (TSMessagesManager)
+
+- (BOOL)wasGroupMessageStored
+{
+    NSNumber *value = objc_getAssociatedObject(self, kOWSSignalServiceProtosEnvelope_WasGroupMessageStored);
+    // Default to NO.
+    return [value boolValue];
+}
+
+- (void)setWasGroupMessageStored:(BOOL)value
+{
+    objc_setAssociatedObject(
+        self, kOWSSignalServiceProtosEnvelope_WasGroupMessageStored, @(value), OBJC_ASSOCIATION_COPY);
+}
+
+@end
+
+#pragma mark -
 
 @interface TSMessagesManager ()
 
@@ -460,7 +491,7 @@ NS_ASSUME_NONNULL_BEGIN
         if (content.hasSyncMessage) {
             [self handleIncomingEnvelope:envelope withSyncMessage:content.syncMessage];
         } else if (content.hasDataMessage) {
-            [self handleIncomingEnvelope:envelope withDataMessage:content.dataMessage];
+            [self handleIncomingEnvelope:envelope withDataMessage:content.dataMessage plaintextData:plaintextData];
         } else if (content.hasCallMessage) {
             [self handleIncomingEnvelope:envelope withCallMessage:content.callMessage];
         } else {
@@ -470,16 +501,131 @@ NS_ASSUME_NONNULL_BEGIN
         OWSSignalServiceProtosDataMessage *dataMessage =
             [OWSSignalServiceProtosDataMessage parseFromData:plaintextData];
         DDLogInfo(@"%@ handling dataMessage: %@", self.tag, [self descriptionForDataMessage:dataMessage]);
-        [self handleIncomingEnvelope:envelope withDataMessage:dataMessage];
+        [self handleIncomingEnvelope:envelope withDataMessage:dataMessage plaintextData:plaintextData];
     } else {
         DDLogWarn(@"%@ Ignoring envelope with neither DataMessage nor Content.", self.tag);
     }
 }
 
+- (void)tryToProcessAnyStoredGroupMessages:(NSData *)groupId
+{
+    OWSAssert(groupId.length > 0);
+
+    // See: [storeGroupMessage:forUnknownGroupId:].
+
+    __block NSArray<NSData *> *_Nullable envelopeDatas = nil;
+    [[TSStorageManager sharedManager].dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+
+        NSString *databaseKey = [self databaseKeyForGroupId:groupId];
+
+        envelopeDatas = [transaction objectForKey:databaseKey inCollection:kTSStorageManager_UnknownGroupMessages];
+
+        [transaction removeObjectForKey:databaseKey inCollection:kTSStorageManager_UnknownGroupMessages];
+    }];
+
+    for (NSData *envelopeData in envelopeDatas) {
+        OWSSignalServiceProtosEnvelope *envelope = [OWSSignalServiceProtosEnvelope parseFromData:envelopeData];
+        if (!envelope) {
+            DDLogError(@"%@ Couldn't parse stored group message.", self.tag);
+            OWSAssert(0);
+            return;
+        }
+
+        // Flag this envelope as having been rehydrated from storage.
+        // In the eventuality that it still can't be processed,
+        // it's better to discard it than to continue trying
+        // to parse it every time we receive a group update for its
+        // group.
+        [envelope setWasGroupMessageStored:YES];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            DDLogInfo(@"%@ Retrying to handle stored group message.", self.tag);
+            [self handleReceivedEnvelope:envelope completion:nil];
+        });
+    }
+}
+
+// YapDatabase keys must be strings, so we hex-encode the groupId.
+- (NSString *)databaseKeyForGroupId:(NSData *)groupId
+{
+    OWSAssert(groupId.length > 0);
+
+    NSUInteger length = groupId.length;
+    unsigned char buffer[length];
+    [groupId getBytes:&buffer[0] length:length];
+
+    NSMutableString *result = [NSMutableString new];
+    for (NSUInteger i = 0; i < length; i++) {
+        unsigned char byte = buffer[i];
+        [result appendFormat:@"%02X", byte];
+    }
+    OWSAssert(result.length == length * 2);
+
+    return [result copy];
+}
+
+- (void)storeGroupMessage:(OWSSignalServiceProtosEnvelope *)incomingEnvelope forUnknownGroupId:(NSData *)groupId
+{
+    OWSAssert(groupId.length > 0);
+    OWSAssert(incomingEnvelope);
+
+    if ([incomingEnvelope wasGroupMessageStored]) {
+        DDLogInfo(@"%@ Skipping store of a stored group message.", self.tag);
+        return;
+    }
+
+    NSData *envelopeData = [incomingEnvelope data];
+    if (envelopeData.length < 1) {
+        DDLogError(@"%@ Couldn't serialize stored group message.", self.tag);
+        OWSAssert(0);
+        return;
+    }
+
+    // When we receive a message for an unknown group id,
+    // we make a "best effort" not to lose that message by
+    // storing it until a "group update" for that group is
+    // received.
+
+    const NSUInteger kMaxMessageSize = 10 * 1024;
+    if (envelopeData.length > kMaxMessageSize) {
+        // Too large; ignore.
+        //
+        // We only need to make a "best effort" to not lose these messages
+        // and we don't want to store large messages in the database.
+        return;
+    }
+
+    DDLogInfo(@"%@ Storing a group message for an unknown group.", self.tag);
+
+    [[TSStorageManager sharedManager].dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+
+        NSString *databaseKey = [self databaseKeyForGroupId:groupId];
+
+        NSArray<NSData *> *envelopeDatas =
+            [transaction objectForKey:databaseKey inCollection:kTSStorageManager_UnknownGroupMessages];
+        NSMutableArray<NSData *> *newEnvelopeDatas
+            = (envelopeDatas ? [envelopeDatas mutableCopy] : [NSMutableArray new]);
+
+        [newEnvelopeDatas addObject:envelopeData];
+        const NSUInteger kMaxMessageCountPerGroup = 16;
+        while (newEnvelopeDatas.count >= kMaxMessageCountPerGroup) {
+            // Only keep the last N messages.  Discard the oldest
+            // on overflow.
+            [newEnvelopeDatas removeObjectAtIndex:0];
+        }
+
+        [transaction setObject:newEnvelopeDatas forKey:databaseKey inCollection:kTSStorageManager_UnknownGroupMessages];
+    }];
+}
+
 - (void)handleIncomingEnvelope:(OWSSignalServiceProtosEnvelope *)incomingEnvelope
                withDataMessage:(OWSSignalServiceProtosDataMessage *)dataMessage
+                 plaintextData:(NSData *)plaintextData
 {
     OWSAssert([NSThread isMainThread]);
+    OWSAssert(incomingEnvelope);
+    OWSAssert(dataMessage);
+    OWSAssert(plaintextData);
 
     if (dataMessage.hasGroup) {
         __block BOOL ignoreMessage = NO;
@@ -491,6 +637,7 @@ NS_ASSUME_NONNULL_BEGIN
                 ignoreMessage = YES;
             }
         }];
+
         if (ignoreMessage) {
             // FIXME: https://github.com/WhisperSystems/Signal-iOS/issues/1340
             DDLogInfo(@"%@ Received message from group that I left or don't know about from: %@.",
@@ -516,6 +663,10 @@ NS_ASSUME_NONNULL_BEGIN
                 failure:^(NSError *error) {
                     DDLogError(@"%@ Failed to send Request Group Info message with error: %@", self.tag, error);
                 }];
+
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                [self storeGroupMessage:incomingEnvelope forUnknownGroupId:dataMessage.group.id];
+            });
 
             return;
         }
@@ -864,6 +1015,11 @@ NS_ASSUME_NONNULL_BEGIN
                                                    inThread:gThread
                                                 messageType:TSInfoMessageTypeGroupUpdate
                                               customMessage:updateGroupInfo] saveWithTransaction:transaction];
+
+                  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                      [self tryToProcessAnyStoredGroupMessages:groupId];
+                  });
+
                   break;
               }
               case OWSSignalServiceProtosGroupContextTypeQuit: {
