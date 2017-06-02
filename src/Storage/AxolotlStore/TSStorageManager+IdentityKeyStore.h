@@ -22,14 +22,11 @@ extern NSString *const TSStorageManagerTrustedKeysCollection;
  * @param   approvedForBlockingUse if the user wants explicit confirmation before sending to changed numbers, whether
  * that confirmation has occurred.
  * @param   approvedForNonBlockingUse YES to override the duration during which we consider an SN "too soon" to send.
- *
- * @returns YES if we are replacing an existing known identity key for recipientId.
- *          NO  if there was no previously stored identity key for the recipient.
  */
-- (BOOL)saveRemoteIdentity:(NSData *)identityKey
-               recipientId:(NSString *)recipientId
-    approvedForBlockingUse:(BOOL)approvedForBlockingUse
- approvedForNonBlockingUse:(BOOL)approvedForNonBlockingUse;
+- (void)saveRemoteIdentity:(NSData *)identityKey
+                  recipientId:(NSString *)recipientId
+       approvedForBlockingUse:(BOOL)approvedForBlockingUse
+    approvedForNonBlockingUse:(BOOL)approvedForNonBlockingUse;
 
 /**
  * Check if a recipient identity corresponds to an untrusted identity

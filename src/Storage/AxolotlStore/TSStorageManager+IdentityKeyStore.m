@@ -65,7 +65,7 @@ const NSTimeInterval kIdentityKeyStoreNonBlockingSecondsThreshold = 5.0;
     return (int)[TSAccountManager getOrGenerateRegistrationId];
 }
 
-- (BOOL)saveRemoteIdentity:(NSData *)identityKey recipientId:(NSString *)recipientId
+- (void)saveRemoteIdentity:(NSData *)identityKey recipientId:(NSString *)recipientId
 {
     OWSAssert(identityKey != nil);
     OWSAssert(recipientId != nil);
@@ -82,17 +82,17 @@ const NSTimeInterval kIdentityKeyStoreNonBlockingSecondsThreshold = 5.0;
         // approved for blocking. Otherwise the user will see inexplicable failures when trying to send to this
         // identity, if they later enabled send-blocking.
         BOOL approvedForBlockingUse = ![TextSecureKitEnv sharedEnv].preferences.isSendingIdentityApprovalRequired;
-        return [self saveRemoteIdentity:identityKey
-                            recipientId:recipientId
-                 approvedForBlockingUse:approvedForBlockingUse
-              approvedForNonBlockingUse:NO];
+        [self saveRemoteIdentity:identityKey
+                          recipientId:recipientId
+               approvedForBlockingUse:approvedForBlockingUse
+            approvedForNonBlockingUse:NO];
     }
 }
 
-- (BOOL)saveRemoteIdentity:(NSData *)identityKey
-               recipientId:(NSString *)recipientId
-    approvedForBlockingUse:(BOOL)approvedForBlockingUse
- approvedForNonBlockingUse:(BOOL)approvedForNonBlockingUse
+- (void)saveRemoteIdentity:(NSData *)identityKey
+                  recipientId:(NSString *)recipientId
+       approvedForBlockingUse:(BOOL)approvedForBlockingUse
+    approvedForNonBlockingUse:(BOOL)approvedForNonBlockingUse
 {
     OWSAssert(identityKey != nil);
     OWSAssert(recipientId != nil);
@@ -109,10 +109,7 @@ const NSTimeInterval kIdentityKeyStoreNonBlockingSecondsThreshold = 5.0;
                                                      createdAt:[NSDate new]
                                         approvedForBlockingUse:approvedForBlockingUse
                                      approvedForNonBlockingUse:approvedForNonBlockingUse] save];
-            return NO;
-        }
-        
-        if (![existingIdentity.identityKey isEqual:identityKey]) {
+        } else if (![existingIdentity.identityKey isEqual:identityKey]) {
             DDLogInfo(@"%@ replacing identity for existing recipient: %@", logTag, recipientId);
             [self createIdentityChangeInfoMessageForRecipientId:recipientId];
             [[[OWSRecipientIdentity alloc] initWithRecipientId:recipientId
@@ -121,18 +118,13 @@ const NSTimeInterval kIdentityKeyStoreNonBlockingSecondsThreshold = 5.0;
                                                      createdAt:[NSDate new]
                                         approvedForBlockingUse:approvedForBlockingUse
                                      approvedForNonBlockingUse:approvedForNonBlockingUse] save];
-            
-            return YES;
-        }
-        
-        if ([self isBlockingApprovalRequiredForIdentity:existingIdentity] || [self isNonBlockingApprovalRequiredForIdentity:existingIdentity]) {
+        } else if ([self isBlockingApprovalRequiredForIdentity:existingIdentity] ||
+            [self isNonBlockingApprovalRequiredForIdentity:existingIdentity]) {
             [existingIdentity updateWithApprovedForBlockingUse:approvedForBlockingUse
                                      approvedForNonBlockingUse:approvedForNonBlockingUse];
-            return NO;
+        } else {
+            DDLogDebug(@"%@ no changes for identity saved for recipient: %@", logTag, recipientId);
         }
-        
-        DDLogDebug(@"%@ no changes for identity saved for recipient: %@", logTag, recipientId);
-        return NO;
     }
 }
 
