@@ -47,6 +47,7 @@ extern NSString *const TSStorageManagerTrustedKeysCollection;
  *
  */
 - (nullable OWSRecipientIdentity *)unseenIdentityChangeForRecipientId:(NSString *)recipientId;
+- (NSArray<OWSRecipientIdentity *> *)unseenIdentityChangesForRecipientIds:(NSArray<NSString *> *)recipientIds;
 
 - (void)generateNewIdentityKey;
 - (nullable NSData *)identityKeyForRecipientId:(NSString *)recipientId;

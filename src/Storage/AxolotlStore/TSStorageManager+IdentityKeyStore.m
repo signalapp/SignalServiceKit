@@ -199,6 +199,23 @@ const NSTimeInterval kIdentityKeyStoreNonBlockingSecondsThreshold = 5.0;
     }
 }
 
+- (NSArray<OWSRecipientIdentity *> *)unseenIdentityChangesForRecipientIds:(NSArray<NSString *> *)recipientIds
+{
+    NSMutableArray<OWSRecipientIdentity *> *unseenRecipientIdentities = [NSMutableArray new];
+    
+    @synchronized([[self class] sharedIdentityKeyLock])
+    {
+        for (NSString *recipientId in recipientIds) {
+            OWSRecipientIdentity *identity = [self unseenIdentityChangeForRecipientId:recipientId];
+            if (identity) {
+                [unseenRecipientIdentities addObject:identity];
+            }
+        }
+    }
+    
+    return [unseenRecipientIdentities copy];
+}
+
 - (nullable OWSRecipientIdentity *)unseenIdentityChangeForRecipientId:(NSString *)recipientId
 {
     OWSAssert(recipientId != nil);
