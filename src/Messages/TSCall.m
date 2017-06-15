@@ -76,6 +76,9 @@ NSUInteger TSCallCurrentSchemaVersion = 1;
             return NSLocalizedString(@"INCOMING_INCOMPLETE_CALL", @"");
         case RPRecentCallTypeMissedBecauseOfChangedIdentity:
             return NSLocalizedString(@"INFO_MESSAGE_MISSED_CALL_DUE_TO_CHANGED_IDENITY", @"info message text shown in conversation view");
+        case RPRecentCallTypeDeclined:
+            return NSLocalizedString(@"INFO_MESSAGE_CALL_DECLINED",
+                @"Message in conversation history that indicates a declined incoming call.");
     }
 }
 

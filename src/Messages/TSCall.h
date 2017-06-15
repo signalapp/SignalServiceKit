@@ -17,6 +17,7 @@ typedef enum {
     RPRecentCallTypeOutgoingIncomplete,
     RPRecentCallTypeIncomingIncomplete,
     RPRecentCallTypeMissedBecauseOfChangedIdentity,
+    RPRecentCallTypeDeclined,
 } RPRecentCallType;
 
 @interface TSCall : TSInteraction <OWSReadTracking>
