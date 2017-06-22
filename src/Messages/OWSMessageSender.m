@@ -594,6 +594,19 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
 {
     TSThread *thread = message.thread;
 
+#ifdef DEBUG
+    // Assert that we're only sending sync messages when necessary
+    if ([message isKindOfClass:[OWSOutgoingSyncMessage class]]) {
+        __block BOOL hasSecondaryDevices = NO;
+        [self.storageManager.dbConnection readWithBlock:^(YapDatabaseReadTransaction *_Nonnull transaction) {
+            hasSecondaryDevices = [OWSDevice hasSecondaryDevicesWithTransaction:transaction];
+        }];
+        if (!hasSecondaryDevices) {
+            OWSFail(@"Sending sync message when we have no devices to sync to.");
+        }
+    }
+#endif
+
     dispatch_async([OWSDispatch sendingQueue], ^{
         if ([thread isKindOfClass:[TSGroupThread class]]) {
             TSGroupThread *gThread = (TSGroupThread *)thread;
