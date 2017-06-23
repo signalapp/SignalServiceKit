@@ -2,13 +2,25 @@
 //  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
 //
 
-#import "NBAsYouTypeFormatter.h"
-#import "NBPhoneNumber.h"
 #import "PhoneNumber.h"
 #import "PhoneNumberUtil.h"
+#import <libPhoneNumber-iOS/NBAsYouTypeFormatter.h>
+#import <libPhoneNumber-iOS/NBMetadataHelper.h>
+#import <libPhoneNumber-iOS/NBPhoneMetaData.h>
+#import <libPhoneNumber-iOS/NBPhoneNumber.h>
+#import <libPhoneNumber-iOS/NBPhoneNumberUtil.h>
 
 static NSString *const RPDefaultsKeyPhoneNumberString    = @"RPDefaultsKeyPhoneNumberString";
 static NSString *const RPDefaultsKeyPhoneNumberCanonical = @"RPDefaultsKeyPhoneNumberCanonical";
+
+@interface PhoneNumber ()
+
+@property (nonatomic) NBPhoneNumber *phoneNumber;
+@property (nonatomic) NSString *e164;
+
+@end
+
+#pragma mark -
 
 @implementation PhoneNumber
 
@@ -33,8 +45,8 @@ static NSString *const RPDefaultsKeyPhoneNumberCanonical = @"RPDefaultsKeyPhoneN
     }
 
     PhoneNumber *phoneNumber = [PhoneNumber new];
-    phoneNumber->phoneNumber = number;
-    phoneNumber->e164        = e164;
+    phoneNumber.phoneNumber = number;
+    phoneNumber.e164 = e164;
     return phoneNumber;
 }
 
@@ -118,8 +130,90 @@ static NSString *const RPDefaultsKeyPhoneNumberCanonical = @"RPDefaultsKeyPhoneN
     return [self phoneNumberFromUserSpecifiedText:sanitizedString];
 }
 
++ (NSString *)nationalPrefixTransformRuleForDefaultRegion
+{
+    static NSString *result = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSString *defaultRegionCode = [self defaultRegionCode];
+        NBMetadataHelper *helper = [[NBMetadataHelper alloc] init];
+        NBPhoneMetaData *defaultRegionMetadata = [helper getMetadataForRegion:defaultRegionCode];
+        result = defaultRegionMetadata.nationalPrefixTransformRule;
+    });
+    return result;
+}
+
++ (NSString *)nationalPrefixTransformRuleForClientPhoneNumber:(NSString *)clientPhoneNumber
+{
+    if (clientPhoneNumber.length < 1) {
+        return nil;
+    }
+    static NSString *result = nil;
+    static NSString *cachedClientPhoneNumber = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSNumber *localCallingCode = [[PhoneNumber phoneNumberFromE164:clientPhoneNumber] getCountryCode];
+        if (localCallingCode != nil) {
+            NSString *localCallingCodePrefix = [NSString stringWithFormat:@"+%@", localCallingCode];
+            NSString *localCountryCode =
+                [PhoneNumberUtil.sharedUtil probableCountryCodeForCallingCode:localCallingCodePrefix];
+            if (localCountryCode && ![localCountryCode isEqualToString:[self defaultRegionCode]]) {
+                NBMetadataHelper *helper = [[NBMetadataHelper alloc] init];
+                NBPhoneMetaData *localNumberRegionMetadata = [helper getMetadataForRegion:localCountryCode];
+                result = localNumberRegionMetadata.nationalPrefixTransformRule;
+            }
+        }
+        cachedClientPhoneNumber = [clientPhoneNumber copy];
+    });
+    OWSAssert([cachedClientPhoneNumber isEqualToString:clientPhoneNumber]);
+    return result;
+}
+
 + (NSArray<PhoneNumber *> *)tryParsePhoneNumbersFromsUserSpecifiedText:(NSString *)text
                                                      clientPhoneNumber:(NSString *)clientPhoneNumber
+{
+    NSMutableArray<PhoneNumber *> *result =
+        [[self tryParsePhoneNumbersFromsNormalizedText:text clientPhoneNumber:clientPhoneNumber] mutableCopy];
+
+    // A handful of countries (Mexico, Argentina, etc.) require a "national" prefix after
+    // their country calling code.
+    //
+    // It's a bit hacky, but we reconstruct these national prefixes from libPhoneNumber's
+    // parsing logic.  It's okay if we botch this a little.  The risk is that we end up with
+    // some misformatted numbers with extra non-numeric regex syntax.  These erroneously
+    // parsed numbers will never be presented to the user, since they'll never survive the
+    // contacts intersection.
+    //
+    // 1. Try to apply a "national prefix" using the phone's region.
+    NSString *nationalPrefixTransformRuleForDefaultRegion = [self nationalPrefixTransformRuleForDefaultRegion];
+    if ([nationalPrefixTransformRuleForDefaultRegion containsString:@"$1"]) {
+        NSString *normalizedText =
+            [nationalPrefixTransformRuleForDefaultRegion stringByReplacingOccurrencesOfString:@"$1" withString:text];
+        if (![normalizedText containsString:@"$"]) {
+            [result addObjectsFromArray:[self tryParsePhoneNumbersFromsNormalizedText:normalizedText
+                                                                    clientPhoneNumber:clientPhoneNumber]];
+        }
+    }
+
+    // 2. Try to apply a "national prefix" using the region that corresponds to the
+    //    calling code for the local phone number.
+    NSString *nationalPrefixTransformRuleForClientPhoneNumber =
+        [self nationalPrefixTransformRuleForClientPhoneNumber:clientPhoneNumber];
+    if ([nationalPrefixTransformRuleForClientPhoneNumber containsString:@"$1"]) {
+        NSString *normalizedText =
+            [nationalPrefixTransformRuleForClientPhoneNumber stringByReplacingOccurrencesOfString:@"$1"
+                                                                                       withString:text];
+        if (![normalizedText containsString:@"$"]) {
+            [result addObjectsFromArray:[self tryParsePhoneNumbersFromsNormalizedText:normalizedText
+                                                                    clientPhoneNumber:clientPhoneNumber]];
+        }
+    }
+
+    return [result copy];
+}
+
++ (NSArray<PhoneNumber *> *)tryParsePhoneNumbersFromsNormalizedText:(NSString *)text
+                                                  clientPhoneNumber:(NSString *)clientPhoneNumber
 {
     OWSAssert(text != nil);
 
@@ -210,30 +304,31 @@ static NSString *const RPDefaultsKeyPhoneNumberCanonical = @"RPDefaultsKeyPhoneN
 }
 
 - (NSURL *)toSystemDialerURL {
-    NSString *link = [NSString stringWithFormat:@"telprompt://%@", e164];
+    NSString *link = [NSString stringWithFormat:@"telprompt://%@", self.e164];
     return [NSURL URLWithString:link];
 }
 
 - (NSString *)toE164 {
-    return e164;
+    return self.e164;
 }
 
 - (NSNumber *)getCountryCode {
-    return phoneNumber.countryCode;
+    return self.phoneNumber.countryCode;
 }
 
 - (BOOL)isValid {
-    return [[PhoneNumberUtil sharedUtil].nbPhoneNumberUtil isValidNumber:phoneNumber];
+    return [[PhoneNumberUtil sharedUtil].nbPhoneNumberUtil isValidNumber:self.phoneNumber];
 }
 
 - (NSString *)localizedDescriptionForUser {
     NBPhoneNumberUtil *phoneUtil = [PhoneNumberUtil sharedUtil].nbPhoneNumberUtil;
 
     NSError *formatError = nil;
-    NSString *pretty = [phoneUtil format:phoneNumber numberFormat:NBEPhoneNumberFormatINTERNATIONAL error:&formatError];
+    NSString *pretty =
+        [phoneUtil format:self.phoneNumber numberFormat:NBEPhoneNumberFormatINTERNATIONAL error:&formatError];
 
     if (formatError != nil)
-        return e164;
+        return self.e164;
     return pretty;
 }
 
@@ -242,18 +337,18 @@ static NSString *const RPDefaultsKeyPhoneNumberCanonical = @"RPDefaultsKeyPhoneN
 }
 
 - (NSString *)description {
-    return e164;
+    return self.e164;
 }
 
 - (void)encodeWithCoder:(NSCoder *)encoder {
-    [encoder encodeObject:phoneNumber forKey:RPDefaultsKeyPhoneNumberString];
-    [encoder encodeObject:e164 forKey:RPDefaultsKeyPhoneNumberCanonical];
+    [encoder encodeObject:self.phoneNumber forKey:RPDefaultsKeyPhoneNumberString];
+    [encoder encodeObject:self.e164 forKey:RPDefaultsKeyPhoneNumberCanonical];
 }
 
 - (id)initWithCoder:(NSCoder *)decoder {
     if ((self = [super init])) {
-        phoneNumber = [decoder decodeObjectForKey:RPDefaultsKeyPhoneNumberString];
-        e164        = [decoder decodeObjectForKey:RPDefaultsKeyPhoneNumberCanonical];
+        self.phoneNumber = [decoder decodeObjectForKey:RPDefaultsKeyPhoneNumberString];
+        self.e164 = [decoder decodeObjectForKey:RPDefaultsKeyPhoneNumberCanonical];
     }
     return self;
 }
