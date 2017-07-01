@@ -84,6 +84,10 @@ extern NSString *const kNSNotificationName_LocalNumberDidChange;
 
 + (void)unregisterTextSecureWithSuccess:(void (^)())success failure:(void (^)(NSError *error))failureBlock;
 
+#ifdef DEBUG
+- (BOOL)isMockForTests;
+#endif
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -42,7 +42,12 @@ NSString *const kNSNotificationName_LocalNumberDidChange = @"kNSNotificationName
     _networkManager = networkManager;
     _storageManager = storageManager;
 
-    OWSSingletonAssert();
+
+#ifdef DEBUG
+    if (![self isMockForTests]) {
+        OWSSingletonAssert();
+    }
+#endif
 
     return self;
 }
@@ -58,6 +63,13 @@ NSString *const kNSNotificationName_LocalNumberDidChange = @"kNSNotificationName
 
     return sharedInstance;
 }
+
+#ifdef DEBUG
+- (BOOL)isMockForTests
+{
+    return NO;
+}
+#endif
 
 - (void)setPhoneNumberAwaitingVerification:(NSString *_Nullable)phoneNumberAwaitingVerification
 {
