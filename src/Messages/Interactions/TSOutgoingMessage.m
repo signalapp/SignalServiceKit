@@ -256,14 +256,32 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
     }];
 }
 
+//- (void)updateWithMessageState:(TSOutgoingMessageState)messageState
+//{
+//    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+//        [self applyChangeToSelfAndLatestOutgoingMessage:transaction
+//                                            changeBlock:^(TSOutgoingMessage *message) {
+//                                                [message setMessageState:messageState];
+//                                            }];
+//    }];
+//}
+
 - (void)updateWithMessageState:(TSOutgoingMessageState)messageState
 {
     [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-        [self applyChangeToSelfAndLatestOutgoingMessage:transaction
-                                            changeBlock:^(TSOutgoingMessage *message) {
-                                                [message setMessageState:messageState];
-                                            }];
+        [self updateWithMessageState:messageState transaction:transaction];
     }];
+}
+
+- (void)updateWithMessageState:(TSOutgoingMessageState)messageState
+                   transaction:(YapDatabaseReadWriteTransaction *)transaction
+{
+    OWSAssert(transaction);
+    
+    [self applyChangeToSelfAndLatestOutgoingMessage:transaction
+                                        changeBlock:^(TSOutgoingMessage *message) {
+                                            [message setMessageState:messageState];
+                                        }];
 }
 
 - (void)updateWithHasSyncedTranscript:(BOOL)hasSyncedTranscript
