@@ -152,7 +152,7 @@ static NSString *const RPDefaultsKeyPhoneNumberCanonical = @"RPDefaultsKeyPhoneN
     return result;
 }
 
-// clientPhoneNumber is the local users phone number and should never change.
+// clientPhoneNumber is the local user's phone number and should never change.
 + (NSString *)nationalPrefixTransformRuleForClientPhoneNumber:(NSString *)clientPhoneNumber
 {
     if (clientPhoneNumber.length < 1) {
@@ -162,6 +162,7 @@ static NSString *const RPDefaultsKeyPhoneNumberCanonical = @"RPDefaultsKeyPhoneN
     static NSString *cachedClientPhoneNumber = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        // clientPhoneNumber is the local user's phone number and should never change.
         NSNumber *localCallingCode = [[PhoneNumber phoneNumberFromE164:clientPhoneNumber] getCountryCode];
         if (localCallingCode != nil) {
             NSString *localCallingCodePrefix = [NSString stringWithFormat:@"+%@", localCallingCode];

@@ -14,8 +14,6 @@
  */
 @interface PhoneNumber : NSObject
 
-+ (PhoneNumber *)phoneNumberFromText:(NSString *)text andRegion:(NSString *)regionCode;
-+ (PhoneNumber *)phoneNumberFromUserSpecifiedText:(NSString *)text;
 + (PhoneNumber *)phoneNumberFromE164:(NSString *)text;
 
 + (PhoneNumber *)tryParsePhoneNumberFromText:(NSString *)text fromRegion:(NSString *)regionCode;
