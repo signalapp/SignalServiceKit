@@ -133,6 +133,7 @@ const uint32_t OWSDisappearingMessagesConfigurationDefaultExpirationDuration = 6
               @(30),
               @(60),
               @(300),
+              @(600),
               @(1800),
               @(3600),
               @(21600),
