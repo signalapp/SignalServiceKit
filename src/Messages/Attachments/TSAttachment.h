@@ -6,6 +6,11 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+typedef NS_ENUM(NSUInteger, TSAttachmentType) {
+    TSAttachmentTypeDefault = 0,
+    TSAttachmentTypeVoiceMessage = 1,
+};
+
 @interface TSAttachment : TSYapDatabaseObject {
 
 @protected
@@ -24,16 +29,22 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) NSString *contentType;
 
 @property (atomic, readwrite) BOOL isDownloaded;
+@property (nonatomic) TSAttachmentType attachmentType;
+
+// Represents the "source" filename sent or received in the protos,
+// not the filename on disk.
+@property (nonatomic, readonly, nullable) NSString *sourceFilename;
 
 // This constructor is used for new instances of TSAttachmentPointer,
 // i.e. undownloaded incoming attachments.
 - (instancetype)initWithServerId:(UInt64)serverId
                    encryptionKey:(NSData *)encryptionKey
-                     contentType:(NSString *)contentType;
+                     contentType:(NSString *)contentType
+                  sourceFilename:(nullable NSString *)sourceFilename;
 
 // This constructor is used for new instances of TSAttachmentStream
 // that represent new, un-uploaded outgoing attachments.
-- (instancetype)initWithContentType:(NSString *)contentType;
+- (instancetype)initWithContentType:(NSString *)contentType sourceFilename:(nullable NSString *)sourceFilename;
 
 // This constructor is used for new instances of TSAttachmentStream
 // that represent downloaded incoming attachments.
@@ -42,6 +53,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable instancetype)initWithCoder:(NSCoder *)coder;
 
 - (void)upgradeFromAttachmentSchemaVersion:(NSUInteger)attachmentSchemaVersion;
+
+- (BOOL)isVoiceMessage;
 
 @end
 

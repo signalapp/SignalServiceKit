@@ -22,6 +22,8 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
 @property (atomic) NSString *customMessage;
 @property (atomic) NSString *mostRecentFailureText;
 @property (atomic) BOOL wasDelivered;
+@property (atomic) NSString *singleGroupRecipient;
+
 // For outgoing, non-legacy group messages sent from this client, this
 // contains the list of recipients to whom the message has been sent.
 //
@@ -112,6 +114,24 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
 
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
                          inThread:(nullable TSThread *)thread
+                   isVoiceMessage:(BOOL)isVoiceMessage
+                 expiresInSeconds:(uint32_t)expiresInSeconds
+{
+    self = [self initWithTimestamp:timestamp
+                          inThread:thread
+                       messageBody:nil
+                     attachmentIds:[NSMutableArray new]
+                  expiresInSeconds:expiresInSeconds
+                   expireStartedAt:0];
+    if (self) {
+        _isVoiceMessage = isVoiceMessage;
+    }
+
+    return self;
+}
+
+- (instancetype)initWithTimestamp:(uint64_t)timestamp
+                         inThread:(nullable TSThread *)thread
                       messageBody:(nullable NSString *)body
                     attachmentIds:(NSMutableArray<NSString *> *)attachmentIds
                  expiresInSeconds:(uint32_t)expiresInSeconds
@@ -165,8 +185,6 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
     _groupMetaMessage = groupMetaMessage;
 
     _attachmentFilenameMap = [NSMutableDictionary new];
-
-    OWSAssert(self.receivedAtDate);
 
     return self;
 }
@@ -227,7 +245,7 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
 {
     OWSAssert(error);
 
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [self applyChangeToSelfAndLatestOutgoingMessage:transaction
                                             changeBlock:^(TSOutgoingMessage *message) {
                                                 [message setMessageState:TSOutgoingMessageStateUnsent];
@@ -238,17 +256,25 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
 
 - (void)updateWithMessageState:(TSOutgoingMessageState)messageState
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-        [self applyChangeToSelfAndLatestOutgoingMessage:transaction
-                                            changeBlock:^(TSOutgoingMessage *message) {
-                                                [message setMessageState:messageState];
-                                            }];
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+        [self updateWithMessageState:messageState transaction:transaction];
     }];
+}
+
+- (void)updateWithMessageState:(TSOutgoingMessageState)messageState
+                   transaction:(YapDatabaseReadWriteTransaction *)transaction
+{
+    OWSAssert(transaction);
+
+    [self applyChangeToSelfAndLatestOutgoingMessage:transaction
+                                        changeBlock:^(TSOutgoingMessage *message) {
+                                            [message setMessageState:messageState];
+                                        }];
 }
 
 - (void)updateWithHasSyncedTranscript:(BOOL)hasSyncedTranscript
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [self applyChangeToSelfAndLatestOutgoingMessage:transaction
                                             changeBlock:^(TSOutgoingMessage *message) {
                                                 [message setHasSyncedTranscript:hasSyncedTranscript];
@@ -269,7 +295,7 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
 
 - (void)updateWithCustomMessage:(NSString *)customMessage
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [self updateWithCustomMessage:customMessage transaction:transaction];
     }];
 }
@@ -286,20 +312,32 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
 
 - (void)updateWithWasDelivered
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [self updateWithWasDeliveredWithTransaction:transaction];
     }];
 }
 
 - (void)updateWithWasSentAndDelivered
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [self applyChangeToSelfAndLatestOutgoingMessage:transaction
                                             changeBlock:^(TSOutgoingMessage *message) {
                                                 [message setMessageState:TSOutgoingMessageStateSentToService];
                                                 [message setWasDelivered:YES];
                                             }];
     }];
+}
+
+- (void)updateWithSingleGroupRecipient:(NSString *)singleGroupRecipient
+                           transaction:(YapDatabaseReadWriteTransaction *)transaction
+{
+    OWSAssert(transaction);
+    OWSAssert(singleGroupRecipient.length > 0);
+
+    [self applyChangeToSelfAndLatestOutgoingMessage:transaction
+                                        changeBlock:^(TSOutgoingMessage *message) {
+                                            [message setSingleGroupRecipient:singleGroupRecipient];
+                                        }];
 }
 
 #pragma mark - Sent Recipients
@@ -359,7 +397,7 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
 
 - (void)updateWithSentRecipient:(NSString *)contactId
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [self updateWithSentRecipient:contactId transaction:transaction];
     }];
 }
@@ -403,8 +441,8 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
     if (!attachmentWasGroupAvatar) {
         NSMutableArray *attachments = [NSMutableArray new];
         for (NSString *attachmentId in self.attachmentIds) {
-            NSString *filename = self.attachmentFilenameMap[attachmentId];
-            [attachments addObject:[self buildAttachmentProtoForAttachmentId:attachmentId filename:filename]];
+            NSString *sourceFilename = self.attachmentFilenameMap[attachmentId];
+            [attachments addObject:[self buildAttachmentProtoForAttachmentId:attachmentId filename:sourceFilename]];
         }
         [builder setAttachmentsArray:attachments];
     }
@@ -417,16 +455,12 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
     return [[self dataMessageBuilder] build];
 }
 
-// For legacy message this is a serialized DataMessage.
-// For modern messages, e.g. Sync and Call messages, this is a serialized Contact
 - (NSData *)buildPlainTextData
 {
-    return [[self buildDataMessage] data];
-}
+    OWSSignalServiceProtosContentBuilder *contentBuilder = [OWSSignalServiceProtosContentBuilder new];
+    contentBuilder.dataMessage = [self buildDataMessage];
 
-- (BOOL)isLegacyMessage
-{
-    return YES;
+    return [[contentBuilder build] data];
 }
 
 - (BOOL)shouldSyncTranscript
@@ -452,7 +486,7 @@ NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRec
     [builder setFileName:filename];
     [builder setKey:attachmentStream.encryptionKey];
     [builder setDigest:attachmentStream.digest];
-
+    [builder setFlags:(self.isVoiceMessage ? OWSSignalServiceProtosAttachmentPointerFlagsVoiceMessage : 0)];
     return [builder build];
 }
 

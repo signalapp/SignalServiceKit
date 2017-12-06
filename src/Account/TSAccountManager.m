@@ -18,11 +18,12 @@ NS_ASSUME_NONNULL_BEGIN
 NSString *const TSRegistrationErrorDomain = @"TSRegistrationErrorDomain";
 NSString *const TSRegistrationErrorUserInfoHTTPStatus = @"TSHTTPStatus";
 NSString *const kNSNotificationName_RegistrationStateDidChange = @"kNSNotificationName_RegistrationStateDidChange";
+NSString *const kNSNotificationName_LocalNumberDidChange = @"kNSNotificationName_LocalNumberDidChange";
 
 @interface TSAccountManager ()
 
-@property (nullable, nonatomic, retain) NSString *phoneNumberAwaitingVerification;
-@property (nonatomic, strong, readonly) TSStorageManager *storageManager;
+@property (nonatomic, nullable) NSString *phoneNumberAwaitingVerification;
+@property (nonatomic, readonly) TSStorageManager *storageManager;
 
 @end
 
@@ -56,6 +57,15 @@ NSString *const kNSNotificationName_RegistrationStateDidChange = @"kNSNotificati
     });
 
     return sharedInstance;
+}
+
+- (void)setPhoneNumberAwaitingVerification:(NSString *_Nullable)phoneNumberAwaitingVerification
+{
+    _phoneNumberAwaitingVerification = phoneNumberAwaitingVerification;
+
+    [[NSNotificationCenter defaultCenter] postNotificationName:kNSNotificationName_LocalNumberDidChange
+                                                        object:nil
+                                                      userInfo:nil];
 }
 
 + (BOOL)isRegistered {
@@ -121,6 +131,19 @@ NSString *const kNSNotificationName_RegistrationStateDidChange = @"kNSNotificati
                                           success:(void (^)())successHandler
                                           failure:(void (^)(NSError *))failureHandler
 {
+    [self registerForPushNotificationsWithPushToken:pushToken
+                                          voipToken:voipToken
+                                            success:successHandler
+                                            failure:failureHandler
+                                   remainingRetries:3];
+}
+
+- (void)registerForPushNotificationsWithPushToken:(NSString *)pushToken
+                                        voipToken:(NSString *)voipToken
+                                          success:(void (^)())successHandler
+                                          failure:(void (^)(NSError *))failureHandler
+                                 remainingRetries:(int)remainingRetries
+{
     TSRegisterForPushRequest *request =
         [[TSRegisterForPushRequest alloc] initWithPushIdentifier:pushToken voipIdentifier:voipToken];
 
@@ -129,7 +152,15 @@ NSString *const kNSNotificationName_RegistrationStateDidChange = @"kNSNotificati
             successHandler();
         }
         failure:^(NSURLSessionDataTask *task, NSError *error) {
-            failureHandler(error);
+            if (remainingRetries > 0) {
+                [self registerForPushNotificationsWithPushToken:pushToken
+                                                      voipToken:voipToken
+                                                        success:successHandler
+                                                        failure:failureHandler
+                                               remainingRetries:remainingRetries - 1];
+            } else {
+                failureHandler(error);
+            }
         }];
 }
 

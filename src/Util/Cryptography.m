@@ -18,15 +18,16 @@ NS_ASSUME_NONNULL_BEGIN
 
 @implementation Cryptography
 
-
 #pragma mark random bytes methods
+
 + (NSMutableData *)generateRandomBytes:(NSUInteger)numberBytes {
     /* used to generate db master key, and to generate signaling key, both at install */
     NSMutableData *randomBytes = [NSMutableData dataWithLength:numberBytes];
-    int err                    = 0;
-    err                        = SecRandomCopyBytes(kSecRandomDefault, numberBytes, [randomBytes mutableBytes]);
+    int err = SecRandomCopyBytes(kSecRandomDefault, numberBytes, [randomBytes mutableBytes]);
     if (err != noErr) {
-        @throw [NSException exceptionWithName:@"random problem" reason:@"problem generating the random " userInfo:nil];
+        DDLogError(@"Error in generateRandomBytes: %d", err);
+        @throw
+            [NSException exceptionWithName:@"random problem" reason:@"problem generating random bytes." userInfo:nil];
     }
     return randomBytes;
 }
@@ -152,8 +153,6 @@ NS_ASSUME_NONNULL_BEGIN
             DDLogWarn(@"%@ Bad digest on decrypting payload. Their digest: %@, our digest: %@", self.tag, digest, ourDigest);
             return nil;
         }
-    } else {
-        DDLogVerbose(@"%@ %s no digest to verify", self.tag, __PRETTY_FUNCTION__);
     }
 
     // decrypt

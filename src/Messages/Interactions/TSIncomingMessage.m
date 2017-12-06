@@ -3,6 +3,8 @@
 //
 
 #import "TSIncomingMessage.h"
+#import "OWSDisappearingMessagesConfiguration.h"
+#import "OWSDisappearingMessagesJob.h"
 #import "TSContactThread.h"
 #import "TSDatabaseSecondaryIndexes.h"
 #import "TSGroupThread.h"
@@ -12,11 +14,24 @@ NS_ASSUME_NONNULL_BEGIN
 
 NSString *const TSIncomingMessageWasReadOnThisDeviceNotification = @"TSIncomingMessageWasReadOnThisDeviceNotification";
 
+@interface TSIncomingMessage ()
+
+@property (nonatomic, getter=wasRead) BOOL read;
+
+@end
+
+#pragma mark -
+
 @implementation TSIncomingMessage
 
 - (instancetype)initWithCoder:(NSCoder *)coder
 {
-    return [super initWithCoder:coder];
+    self = [super initWithCoder:coder];
+    if (!self) {
+        return self;
+    }
+
+    return self;
 }
 
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
@@ -57,15 +72,13 @@ NSString *const TSIncomingMessageWasReadOnThisDeviceNotification = @"TSIncomingM
     _sourceDeviceId = sourceDeviceId;
     _read = NO;
 
-    OWSAssert(self.receivedAtDate);
-
     return self;
 }
 
 + (nullable instancetype)findMessageWithAuthorId:(NSString *)authorId timestamp:(uint64_t)timestamp
 {
     __block TSIncomingMessage *foundMessage;
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         // In theory we could build a new secondaryIndex for (authorId,timestamp), but in practice there should
         // be *very* few (millisecond) timestamps with multiple authors.
         [TSDatabaseSecondaryIndexes
@@ -97,37 +110,40 @@ NSString *const TSIncomingMessageWasReadOnThisDeviceNotification = @"TSIncomingM
     return foundMessage;
 }
 
-- (void)markAsReadFromReadReceipt
+#pragma mark - OWSReadTracking
+
+- (BOOL)shouldAffectUnreadCounts
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-        [self markAsReadWithoutNotificationWithTransaction:transaction];
-    }];
+    return YES;
 }
 
-- (void)markAsReadLocallyWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+- (void)markAsReadWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+                  sendReadReceipt:(BOOL)sendReadReceipt
+                 updateExpiration:(BOOL)updateExpiration
 {
-    [self markAsReadWithoutNotificationWithTransaction:transaction];
-    [[NSNotificationCenter defaultCenter] postNotificationName:TSIncomingMessageWasReadOnThisDeviceNotification
-                                                        object:self];
-}
+    OWSAssert(transaction);
 
-- (void)markAsReadLocally
-{
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-        [self markAsReadWithoutNotificationWithTransaction:transaction];
-    }];
-    // Notification must happen outside of the transaction, else we'll likely crash when the notification receiver
-    // tries to do anything with the DB.
-    [[NSNotificationCenter defaultCenter] postNotificationName:TSIncomingMessageWasReadOnThisDeviceNotification
-                                                        object:self];
-}
+    if (_read) {
+        return;
+    }
 
-- (void)markAsReadWithoutNotificationWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
-{
-    DDLogInfo(@"%@ marking as read uniqueId: %@ which has timestamp: %llu", self.tag, self.uniqueId, self.timestamp);
+    DDLogDebug(@"%@ marking as read uniqueId: %@ which has timestamp: %llu", self.tag, self.uniqueId, self.timestamp);
     _read = YES;
     [self saveWithTransaction:transaction];
     [self touchThreadWithTransaction:transaction];
+
+    if (updateExpiration) {
+        [OWSDisappearingMessagesJob setExpirationForMessage:self];
+    }
+
+    if (sendReadReceipt) {
+        // Notification must happen outside of the transaction, else we'll likely crash when the notification receiver
+        // tries to do anything with the DB.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:TSIncomingMessageWasReadOnThisDeviceNotification
+                                                                object:self];
+        });
+    }
 }
 
 #pragma mark - Logging

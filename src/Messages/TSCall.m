@@ -13,13 +13,15 @@ NSUInteger TSCallCurrentSchemaVersion = 1;
 
 @interface TSCall ()
 
+@property (nonatomic, getter=wasRead) BOOL read;
+
 @property (nonatomic, readonly) NSUInteger callSchemaVersion;
 
 @end
 
-@implementation TSCall
+#pragma mark -
 
-@synthesize read = _read;
+@implementation TSCall
 
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
                    withCallNumber:(NSString *)contactNumber
@@ -34,7 +36,7 @@ NSUInteger TSCallCurrentSchemaVersion = 1;
 
     _callSchemaVersion = TSCallCurrentSchemaVersion;
     _callType = callType;
-    if (_callType == RPRecentCallTypeMissed) {
+    if (_callType == RPRecentCallTypeMissed || _callType == RPRecentCallTypeMissedBecauseOfChangedIdentity) {
         _read = NO;
     } else {
         _read = YES;
@@ -72,27 +74,37 @@ NSUInteger TSCallCurrentSchemaVersion = 1;
             return NSLocalizedString(@"OUTGOING_INCOMPLETE_CALL", @"");
         case RPRecentCallTypeIncomingIncomplete:
             return NSLocalizedString(@"INCOMING_INCOMPLETE_CALL", @"");
+        case RPRecentCallTypeMissedBecauseOfChangedIdentity:
+            return NSLocalizedString(@"INFO_MESSAGE_MISSED_CALL_DUE_TO_CHANGED_IDENITY", @"info message text shown in conversation view");
+        case RPRecentCallTypeIncomingDeclined:
+            return NSLocalizedString(@"INCOMING_DECLINED_CALL",
+                @"info message recorded in conversation history when local user declined a call");
     }
 }
 
 #pragma mark - OWSReadTracking
 
-- (void)markAsReadLocallyWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+- (BOOL)shouldAffectUnreadCounts
 {
-    DDLogInfo(@"%@ marking as read uniqueId: %@ which has timestamp: %llu", self.tag, self.uniqueId, self.timestamp);
-
-    _read = YES;
-    [self saveWithTransaction:transaction];
-
-    // redraw any thread-related unread count UI.
-    [self touchThreadWithTransaction:transaction];
+    return YES;
 }
 
-- (void)markAsReadLocally
+- (void)markAsReadWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+                  sendReadReceipt:(BOOL)sendReadReceipt
+                 updateExpiration:(BOOL)updateExpiration
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *_Nonnull transaction) {
-        [self markAsReadLocallyWithTransaction:transaction];
-    }];
+    OWSAssert(transaction);
+
+    if (_read) {
+        return;
+    }
+
+    DDLogDebug(@"%@ marking as read uniqueId: %@ which has timestamp: %llu", self.tag, self.uniqueId, self.timestamp);
+    _read = YES;
+    [self saveWithTransaction:transaction];
+    [self touchThreadWithTransaction:transaction];
+
+    // Ignore sendReadReceipt and updateExpiration; they don't apply to calls.
 }
 
 #pragma mark - Methods
@@ -107,7 +119,7 @@ NSUInteger TSCallCurrentSchemaVersion = 1;
 
     _callType = callType;
 
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *_Nonnull transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *_Nonnull transaction) {
         [self saveWithTransaction:transaction];
 
         // redraw any thread-related unread count UI.

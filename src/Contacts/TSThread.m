@@ -6,6 +6,7 @@
 #import "OWSReadTracking.h"
 #import "TSDatabaseView.h"
 #import "TSIncomingMessage.h"
+#import "TSInfoMessage.h"
 #import "TSInteraction.h"
 #import "TSInvalidIdentityKeyReceivingErrorMessage.h"
 #import "TSOutgoingMessage.h"
@@ -84,6 +85,12 @@ NS_ASSUME_NONNULL_BEGIN
     return nil;
 }
 
+- (NSArray<NSString *> *)recipientIdentifiers
+{
+    NSAssert(FALSE, @"Should be implemented in subclasses");
+    return @[];
+}
+
 - (nullable UIImage *)image
 {
     return nil;
@@ -124,7 +131,7 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (void)enumerateInteractionsUsingBlock:(void (^)(TSInteraction *interaction))block
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [self enumerateInteractionsWithTransaction:transaction
                                         usingBlock:^(
                                             TSInteraction *interaction, YapDatabaseReadTransaction *transaction) {
@@ -165,7 +172,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSUInteger)numberOfInteractions
 {
     __block NSUInteger count;
-    [[self dbConnection] readWithBlock:^(YapDatabaseReadTransaction *_Nonnull transaction) {
+    [[self dbReadConnection] readWithBlock:^(YapDatabaseReadTransaction *_Nonnull transaction) {
         YapDatabaseViewTransaction *interactionsByThread = [transaction ext:TSMessageDatabaseViewExtensionName];
         count = [interactionsByThread numberOfItemsInGroup:self.uniqueId];
     }];
@@ -181,6 +188,24 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     return hasUnread;
+}
+
+- (NSArray<id<OWSReadTracking>> *)unseenMessagesWithTransaction:(YapDatabaseReadTransaction *)transaction
+{
+    NSMutableArray<id<OWSReadTracking>> *messages = [NSMutableArray new];
+    [[TSDatabaseView unseenDatabaseViewExtension:transaction]
+        enumerateRowsInGroup:self.uniqueId
+                  usingBlock:^(
+                      NSString *collection, NSString *key, id object, id metadata, NSUInteger index, BOOL *stop) {
+
+                      if (![object conformsToProtocol:@protocol(OWSReadTracking)]) {
+                          OWSFail(@"%@ Unexpected object in unseen messages: %@", self.tag, object);
+                          return;
+                      }
+                      [messages addObject:(id<OWSReadTracking>)object];
+                  }];
+
+    return [messages copy];
 }
 
 - (NSArray<id<OWSReadTracking> > *)unreadMessagesWithTransaction:(YapDatabaseReadTransaction *)transaction
@@ -200,36 +225,45 @@ NS_ASSUME_NONNULL_BEGIN
     return [messages copy];
 }
 
-- (NSArray<id<OWSReadTracking> > *)unreadMessages
-{
-    __block NSArray<id<OWSReadTracking> > *messages;
-    [self.dbConnection readWithBlock:^(YapDatabaseReadTransaction *_Nonnull transaction) {
-        messages = [self unreadMessagesWithTransaction:transaction];
-    }];
-
-    return messages;
-}
-
 - (void)markAllAsReadWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
 {
-    for (id<OWSReadTracking> message in [self unreadMessagesWithTransaction:transaction]) {
-        [message markAsReadLocallyWithTransaction:transaction];
+    for (id<OWSReadTracking> message in [self unseenMessagesWithTransaction:transaction]) {
+        [message markAsReadWithTransaction:transaction sendReadReceipt:YES updateExpiration:YES];
     }
-}
 
-- (void)markAllAsRead
-{
-    for (id<OWSReadTracking> message in [self unreadMessages]) {
-        [message markAsReadLocally];
-    }
+    // Just to be defensive, we'll also check for unread messages.
+    OWSAssert([self unseenMessagesWithTransaction:transaction].count < 1);
 }
 
 - (TSInteraction *) lastInteraction {
     __block TSInteraction *last;
-    [TSStorageManager.sharedManager.dbConnection readWithBlock:^(YapDatabaseReadTransaction *transaction){
+    [TSStorageManager.sharedManager.dbReadConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
         last = [[transaction ext:TSMessageDatabaseViewExtensionName] lastObjectInGroup:self.uniqueId];
     }];
-    return (TSInteraction *)last;
+    return last;
+}
+
+- (TSInteraction *)lastInteractionForInbox
+{
+    __block TSInteraction *last = nil;
+    [TSStorageManager.sharedManager.dbReadConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
+        [[transaction ext:TSMessageDatabaseViewExtensionName]
+            enumerateRowsInGroup:self.uniqueId
+                     withOptions:NSEnumerationReverse
+                      usingBlock:^(
+                          NSString *collection, NSString *key, id object, id metadata, NSUInteger index, BOOL *stop) {
+
+                          OWSAssert([object isKindOfClass:[TSInteraction class]]);
+
+                          TSInteraction *interaction = (TSInteraction *)object;
+
+                          if ([TSThread shouldInteractionAppearInInbox:interaction]) {
+                              last = interaction;
+                              *stop = YES;
+                          }
+                      }];
+    }];
+    return last;
 }
 
 - (NSDate *)lastMessageDate {
@@ -241,16 +275,49 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 - (NSString *)lastMessageLabel {
-    if (self.lastInteraction == nil) {
+    TSInteraction *interaction = self.lastInteractionForInbox;
+    if (interaction == nil) {
         return @"";
     } else {
-        return [self lastInteraction].description;
+        return interaction.description;
     }
 }
 
-- (void)updateWithLastMessage:(TSInteraction *)lastMessage transaction:(YapDatabaseReadWriteTransaction *)transaction {
-    NSDate *lastMessageDate = [lastMessage receiptDateForSorting];
+// Returns YES IFF the interaction should show up in the inbox as the last message.
++ (BOOL)shouldInteractionAppearInInbox:(TSInteraction *)interaction
+{
+    OWSAssert(interaction);
 
+    if (interaction.isDynamicInteraction) {
+        return NO;
+    }
+
+    if ([interaction isKindOfClass:[TSErrorMessage class]]) {
+        TSErrorMessage *errorMessage = (TSErrorMessage *)interaction;
+        if (errorMessage.errorType == TSErrorMessageNonBlockingIdentityChange) {
+            // Otherwise all group threads with the recipient will percolate to the top of the inbox, even though
+            // there was no meaningful interaction.
+            return NO;
+        }
+    } else if ([interaction isKindOfClass:[TSInfoMessage class]]) {
+        TSInfoMessage *infoMessage = (TSInfoMessage *)interaction;
+        if (infoMessage.messageType == TSInfoMessageVerificationStateChange) {
+            return NO;
+        }
+    }
+
+    return YES;
+}
+
+- (void)updateWithLastMessage:(TSInteraction *)lastMessage transaction:(YapDatabaseReadWriteTransaction *)transaction {
+    OWSAssert(lastMessage);
+    OWSAssert(transaction);
+
+    if (![self.class shouldInteractionAppearInInbox:lastMessage]) {
+        return;
+    }
+
+    NSDate *lastMessageDate = [lastMessage dateForSorting];
     if (!_lastMessageDate || [lastMessageDate timeIntervalSinceDate:self.lastMessageDate] > 0) {
         _lastMessageDate = lastMessageDate;
 
@@ -330,7 +397,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)updateWithMutedUntilDate:(NSDate *)mutedUntilDate
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [self applyChangeToSelfAndLatestThread:transaction
                                             changeBlock:^(TSThread *thread) {
                                                 [thread setMutedUntilDate:mutedUntilDate];

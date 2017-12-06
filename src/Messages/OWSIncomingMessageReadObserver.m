@@ -1,10 +1,9 @@
-//  Created by Michael Kirk on 9/24/16.
-//  Copyright © 2016 Open Whisper Systems. All rights reserved.
+//
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//
 
 #import "OWSIncomingMessageReadObserver.h"
 #import "NSDate+millisecondTimeStamp.h"
-#import "OWSDisappearingMessagesConfiguration.h"
-#import "OWSDisappearingMessagesJob.h"
 #import "OWSSendReadReceiptsJob.h"
 #import "TSIncomingMessage.h"
 
@@ -12,8 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface OWSIncomingMessageReadObserver ()
 
-@property BOOL isObserving;
-@property (nonatomic, readonly) OWSDisappearingMessagesJob *disappearingMessagesJob;
+@property (nonatomic) BOOL isObserving;
 @property (nonatomic, readonly) OWSSendReadReceiptsJob *sendReadReceiptsJob;
 
 @end
@@ -34,7 +32,6 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     _isObserving = NO;
-    _disappearingMessagesJob = [[OWSDisappearingMessagesJob alloc] initWithStorageManager:storageManager];
     _sendReadReceiptsJob = [[OWSSendReadReceiptsJob alloc] initWithMessageSender:messageSender];
 
     return self;
@@ -42,6 +39,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)startObserving
 {
+    OWSAssert([NSThread isMainThread]);
+
     if (self.isObserving) {
         return;
     }
@@ -61,7 +60,6 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     TSIncomingMessage *message = (TSIncomingMessage *)notification.object;
-    [self.disappearingMessagesJob setExpirationForMessage:message];
     [self.sendReadReceiptsJob runWith:message];
 }
 

@@ -1,7 +1,10 @@
-//  Copyright © 2016 Open Whisper Systems. All rights reserved.
+//
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//
 
 #import "OWSOutgoingSyncMessage.h"
 #import "OWSSignalServiceProtos.pb.h"
+#import "Cryptography.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -19,18 +22,22 @@ NS_ASSUME_NONNULL_BEGIN
     return NO;
 }
 
-- (BOOL)isLegacyMessage
-{
-    return NO;
-}
-
+// This method should not be overridden, since we want to add random padding to *every* sync message
 - (OWSSignalServiceProtosSyncMessage *)buildSyncMessage
 {
-    NSAssert(NO, @"buildSyncMessage must be overridden in subclass");
+    OWSSignalServiceProtosSyncMessageBuilder *builder = [self syncMessageBuilder];
+    
+    // Add a random 1-512 bytes to obscure sync message type
+    size_t paddingBytesLength = arc4random_uniform(512) + 1;
+    builder.padding = [Cryptography generateRandomBytes:paddingBytesLength];
+    
+    return [builder build];
+}
 
-    // e.g.
-    OWSSignalServiceProtosSyncMessageBuilder *syncMessageBuilder = [OWSSignalServiceProtosSyncMessageBuilder new];
-    return [syncMessageBuilder build];
+- (OWSSignalServiceProtosSyncMessageBuilder *)syncMessageBuilder
+{
+    OWSFail(@"Abstract method should be overridden in subclass.");
+    return [OWSSignalServiceProtosSyncMessageBuilder new];
 }
 
 - (NSData *)buildPlainTextData

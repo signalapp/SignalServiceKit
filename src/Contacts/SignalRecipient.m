@@ -3,8 +3,8 @@
 //
 
 #import "SignalRecipient.h"
+#import "OWSIdentityManager.h"
 #import "TSStorageHeaders.h"
-#import "TSStorageManager+IdentityKeyStore.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -37,7 +37,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable instancetype)recipientWithTextSecureIdentifier:(NSString *)textSecureIdentifier
 {
     __block SignalRecipient *recipient;
-    [self.dbConnection readWithBlock:^(YapDatabaseReadTransaction *_Nonnull transaction) {
+    [self.dbReadConnection readWithBlock:^(YapDatabaseReadTransaction *_Nonnull transaction) {
         recipient = [self recipientWithTextSecureIdentifier:textSecureIdentifier withTransaction:transaction];
     }];
     return recipient;

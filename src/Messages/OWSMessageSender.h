@@ -71,7 +71,7 @@ NS_SWIFT_NAME(MessageSender)
  */
 - (void)sendAttachmentData:(NSData *)attachmentData
                contentType:(NSString *)contentType
-                  filename:(nullable NSString *)filename
+            sourceFilename:(nullable NSString *)sourceFilename
                  inMessage:(TSOutgoingMessage *)outgoingMessage
                    success:(void (^)())successHandler
                    failure:(void (^)(NSError *error))failureHandler;
@@ -85,14 +85,6 @@ NS_SWIFT_NAME(MessageSender)
                           inMessage:(TSOutgoingMessage *)outgoingMessage
                             success:(void (^)())successHandler
                             failure:(void (^)(NSError *error))failureHandler;
-
-/**
- * Resend a message to a select recipient in a thread when previous sending failed due to key error.
- * e.g. If a key change prevents one recipient from receiving the message, we don't want to resend to the entire group.
- */
-- (void)resendMessageFromKeyError:(TSInvalidIdentityKeySendingErrorMessage *)errorMessage
-                          success:(void (^)())successHandler
-                          failure:(void (^)(NSError *error))failureHandler;
 
 - (void)handleMessageSentRemotely:(TSOutgoingMessage *)message sentAt:(uint64_t)sentAt;
 

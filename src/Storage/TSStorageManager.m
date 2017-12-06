@@ -15,15 +15,12 @@
 #import "TSDatabaseSecondaryIndexes.h"
 #import "TSDatabaseView.h"
 #import "TSInteraction.h"
-#import "TSPrivacyPreferences.h"
 #import "TSThread.h"
 #import <25519/Randomness.h>
 #import <SAMKeychain/SAMKeychain.h>
 #import <YapDatabase/YapDatabaseRelationship.h>
 
 NS_ASSUME_NONNULL_BEGIN
-
-NSString *const TSUIDatabaseConnectionDidUpdateNotification = @"TSUIDatabaseConnectionDidUpdateNotification";
 
 NSString *const TSStorageManagerExceptionNameDatabasePasswordInaccessible = @"TSStorageManagerExceptionNameDatabasePasswordInaccessible";
 NSString *const TSStorageManagerExceptionNameDatabasePasswordInaccessibleWhileBackgrounded =
@@ -159,7 +156,8 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
     if (!_database) {
         return NO;
     }
-    _dbConnection = self.newDatabaseConnection;
+    _dbReadConnection = self.newDatabaseConnection;
+    _dbReadWriteConnection = self.newDatabaseConnection;
 
     return YES;
 }
@@ -194,25 +192,45 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
     };
 }
 
-- (void)setupDatabase
+- (void)setupDatabaseWithSafeBlockingMigrations:(void (^_Nonnull)())safeBlockingMigrationsBlock
 {
-    // Register extensions which are essential for rendering threads synchronously
+    // Synchronously register extensions which are essential for views.
     [TSDatabaseView registerThreadDatabaseView];
-    [TSDatabaseView registerBuddyConversationDatabaseView];
+    [TSDatabaseView registerThreadInteractionsDatabaseView];
     [TSDatabaseView registerUnreadDatabaseView];
     [self.database registerExtension:[TSDatabaseSecondaryIndexes registerTimeStampIndex] withName:@"idx"];
+
+    // Run the blocking migrations.
+    //
+    // These need to run _before_ the async registered database views or
+    // they will block on them, which (in the upgrade case) can block
+    // return of appDidFinishLaunching... which in term can cause the
+    // app to crash on launch.
+    safeBlockingMigrationsBlock();
+
+    // Asynchronously register other extensions.
+    //
+    // All sync registrations must be done before all async registrations,
+    // or the sync registrations will block on the async registrations.
+    [TSDatabaseView asyncRegisterUnseenDatabaseView];
+    [TSDatabaseView asyncRegisterThreadOutgoingMessagesDatabaseView];
+    [TSDatabaseView asyncRegisterThreadSpecialMessagesDatabaseView];
 
     // Register extensions which aren't essential for rendering threads async
     [[OWSIncomingMessageFinder new] asyncRegisterExtension];
     [TSDatabaseView asyncRegisterSecondaryDevicesDatabaseView];
     [OWSReadReceipt asyncRegisterIndexOnSenderIdAndTimestampWithDatabase:self.database];
-    OWSDisappearingMessagesFinder *finder = [[OWSDisappearingMessagesFinder alloc] initWithStorageManager:self];
-    [finder asyncRegisterDatabaseExtensions];
+    [OWSDisappearingMessagesFinder asyncRegisterDatabaseExtensions:self];
     OWSFailedMessagesJob *failedMessagesJob = [[OWSFailedMessagesJob alloc] initWithStorageManager:self];
     [failedMessagesJob asyncRegisterDatabaseExtensions];
     OWSFailedAttachmentDownloadsJob *failedAttachmentDownloadsMessagesJob =
         [[OWSFailedAttachmentDownloadsJob alloc] initWithStorageManager:self];
     [failedAttachmentDownloadsMessagesJob asyncRegisterDatabaseExtensions];
+
+    // NOTE: [TSDatabaseView asyncRegistrationCompletion] ensures that
+    // kNSNotificationName_DatabaseViewRegistrationComplete is not fired until all
+    // of the async registrations are complete.
+    [TSDatabaseView asyncRegistrationCompletion];
 }
 
 - (void)protectSignalFiles {
@@ -245,11 +263,6 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 - (nullable YapDatabaseConnection *)newDatabaseConnection
 {
     return self.database.newConnection;
-}
-
-- (TSPrivacyPreferences *)privacyPreferences
-{
-    return [TSPrivacyPreferences sharedInstance];
 }
 
 - (BOOL)userSetPassword {
@@ -376,19 +389,19 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 #pragma mark - convenience methods
 
 - (void)purgeCollection:(NSString *)collection {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-      [transaction removeAllObjectsInCollection:collection];
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+        [transaction removeAllObjectsInCollection:collection];
     }];
 }
 
 - (void)setObject:(id)object forKey:(NSString *)key inCollection:(NSString *)collection {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-      [transaction setObject:object forKey:key inCollection:collection];
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+        [transaction setObject:object forKey:key inCollection:collection];
     }];
 }
 
 - (void)removeObjectForKey:(NSString *)string inCollection:(NSString *)collection {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [transaction removeObjectForKey:string inCollection:collection];
     }];
 }
@@ -396,8 +409,8 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 - (id)objectForKey:(NSString *)key inCollection:(NSString *)collection {
     __block NSString *object;
 
-    [self.dbConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
-      object = [transaction objectForKey:key inCollection:collection];
+    [self.dbReadConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
+        object = [transaction objectForKey:key inCollection:collection];
     }];
 
     return object;
@@ -407,8 +420,8 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 {
     __block NSDictionary *object;
 
-    [self.dbConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
-      object = [transaction objectForKey:key inCollection:collection];
+    [self.dbReadConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
+        object = [transaction objectForKey:key inCollection:collection];
     }];
 
     return object;
@@ -467,7 +480,7 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 - (int)incrementIntForKey:(NSString *)key inCollection:(NSString *)collection
 {
     __block int value = 0;
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         value = [[transaction objectForKey:key inCollection:collection] intValue];
         value++;
         [transaction setObject:@(value) forKey:key inCollection:collection];
@@ -491,11 +504,11 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 }
 
 - (void)deleteThreadsAndMessages {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-      [transaction removeAllObjectsInCollection:[TSThread collection]];
-      [transaction removeAllObjectsInCollection:[SignalRecipient collection]];
-      [transaction removeAllObjectsInCollection:[TSInteraction collection]];
-      [transaction removeAllObjectsInCollection:[TSAttachment collection]];
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+        [transaction removeAllObjectsInCollection:[TSThread collection]];
+        [transaction removeAllObjectsInCollection:[SignalRecipient collection]];
+        [transaction removeAllObjectsInCollection:[TSInteraction collection]];
+        [transaction removeAllObjectsInCollection:[TSAttachment collection]];
     }];
     [TSAttachmentStream deleteAttachments];
 }
@@ -517,7 +530,8 @@ static NSString *keychainDBPassAccount    = @"TSDatabasePass";
 - (void)resetSignalStorage
 {
     self.database = nil;
-    _dbConnection = nil;
+    _dbReadConnection = nil;
+    _dbReadWriteConnection = nil;
 
     [self deletePasswordFromKeychain];
 

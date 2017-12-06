@@ -1,10 +1,11 @@
-//  Created by Michael Kirk on 9/22/16.
-//  Copyright © 2016 Open Whisper Systems. All rights reserved.
+//
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
+//
 
 #import "OWSFingerprintBuilder.h"
 #import "ContactsManagerProtocol.h"
 #import "OWSFingerprint.h"
-#import "TSStorageManager+IdentityKeyStore.h"
+#import "OWSIdentityManager.h"
 #import "TSStorageManager+keyingMaterial.h"
 #import <25519/Curve25519.h>
 
@@ -33,9 +34,14 @@ NS_ASSUME_NONNULL_BEGIN
     return self;
 }
 
-- (OWSFingerprint *)fingerprintWithTheirSignalId:(NSString *)theirSignalId
+- (nullable OWSFingerprint *)fingerprintWithTheirSignalId:(NSString *)theirSignalId
 {
-    NSData *_Nullable theirIdentityKey = [self.storageManager identityKeyForRecipientId:theirSignalId];
+    NSData *_Nullable theirIdentityKey = [[OWSIdentityManager sharedManager] identityKeyForRecipientId:theirSignalId];
+
+    if (theirIdentityKey == nil) {
+        OWSAssert(NO);
+        return nil;
+    }
 
     return [self fingerprintWithTheirSignalId:theirSignalId theirIdentityKey:theirIdentityKey];
 }
@@ -45,7 +51,7 @@ NS_ASSUME_NONNULL_BEGIN
     NSString *theirName = [self.contactsManager displayNameForPhoneIdentifier:theirSignalId];
 
     NSString *mySignalId = [self.storageManager localNumber];
-    NSData *myIdentityKey = [self.storageManager identityKeyPair].publicKey;
+    NSData *myIdentityKey = [[OWSIdentityManager sharedManager] identityKeyPair].publicKey;
 
     return [OWSFingerprint fingerprintWithMyStableId:mySignalId
                                        myIdentityKey:myIdentityKey

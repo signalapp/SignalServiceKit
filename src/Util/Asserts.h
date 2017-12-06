@@ -13,24 +13,45 @@
 #define CONVERT_TO_STRING(X) #X
 #define CONVERT_EXPR_TO_STRING(X) CONVERT_TO_STRING(X)
 
-#define OWSAssert(X) \
-if (!(X)) { \
-NSLog(@"Assertion failed: %s", CONVERT_EXPR_TO_STRING(X)); \
-NSAssert(0, @"Assertion failed: %s", CONVERT_EXPR_TO_STRING(X)); \
-}
+// OWSAssert() and OWSFail() should be used in Obj-C methods.
+// OWSCAssert() and OWSCFail() should be used in free functions.
 
-// OWSAssert() should be used in Obj-C and Swift methods.
-// OWSCAssert() should be used in free functions.
-#define OWSCAssert(X) \
-if (!(X)) { \
-NSLog(@"Assertion failed: %s", CONVERT_EXPR_TO_STRING(X)); \
-NSCAssert(0, @"Assertion failed: %s", CONVERT_EXPR_TO_STRING(X)); \
-}
+#define OWSAssert(X)                                                                                                   \
+    if (!(X)) {                                                                                                        \
+        DDLogError(@"%s Assertion failed: %s", __PRETTY_FUNCTION__, CONVERT_EXPR_TO_STRING(X));                        \
+        [DDLog flushLog];                                                                                              \
+        NSAssert(0, @"Assertion failed: %s", CONVERT_EXPR_TO_STRING(X));                                               \
+    }
+
+#define OWSCAssert(X)                                                                                                  \
+    if (!(X)) {                                                                                                        \
+        DDLogError(@"%s Assertion failed: %s", __PRETTY_FUNCTION__, CONVERT_EXPR_TO_STRING(X));                        \
+        [DDLog flushLog];                                                                                              \
+        NSCAssert(0, @"Assertion failed: %s", CONVERT_EXPR_TO_STRING(X));                                              \
+    }
+
+#define OWSFail(message, ...)                                                                                          \
+    {                                                                                                                  \
+        NSString *formattedMessage = [NSString stringWithFormat:message, ##__VA_ARGS__];                               \
+        DDLogError(@"%s %@", __PRETTY_FUNCTION__, formattedMessage);                                                   \
+        [DDLog flushLog];                                                                                              \
+        NSAssert(0, formattedMessage);                                                                                 \
+    }
+
+#define OWSCFail(message, ...)                                                                                         \
+    {                                                                                                                  \
+        NSString *formattedMessage = [NSString stringWithFormat:message, ##__VA_ARGS__];                               \
+        DDLogError(@"%s %@", __PRETTY_FUNCTION__, formattedMessage);                                                   \
+        [DDLog flushLog];                                                                                              \
+        NSCAssert(0, formattedMessage);                                                                                \
+    }
 
 #else
 
 #define OWSAssert(X)
 #define OWSCAssert(X)
+#define OWSFail(message, ...)
+#define OWSCFail(message, ...)
 
 #endif
 
@@ -49,7 +70,16 @@ NSCAssert(0, @"Assertion failed: %s", CONVERT_EXPR_TO_STRING(X)); \
 //
 // 1. Use OWSSingletonAssertFlag() outside the class definition.
 // 2. Use OWSSingletonAssertInit() in each initializer.
+
+#ifndef SSK_BUILDING_FOR_TESTS
 #ifdef DEBUG
+
+#define ENFORCE_SINGLETONS
+
+#endif
+#endif
+
+#ifdef ENFORCE_SINGLETONS
 
 #define OWSSingletonAssertFlag() static BOOL _isSingletonCreated = NO;
 

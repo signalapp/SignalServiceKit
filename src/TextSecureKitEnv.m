@@ -10,10 +10,8 @@ static TextSecureKitEnv *TextSecureKitEnvSharedInstance;
 
 @implementation TextSecureKitEnv
 
-@synthesize callMessageHandler = _callMessageHandler,
-    contactsManager = _contactsManager,
-    messageSender = _messageSender,
-    notificationsManager = _notificationsManager;
+@synthesize callMessageHandler = _callMessageHandler, contactsManager = _contactsManager,
+            messageSender = _messageSender, notificationsManager = _notificationsManager;
 
 - (instancetype)initWithCallMessageHandler:(id<OWSCallMessageHandler>)callMessageHandler
                            contactsManager:(id<ContactsManagerProtocol>)contactsManager

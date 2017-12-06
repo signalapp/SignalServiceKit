@@ -6,15 +6,32 @@
 #import "MIMETypeUtil.h"
 #import "TSAttachmentPointer.h"
 #import <AVFoundation/AVFoundation.h>
+#import <ImageIO/ImageIO.h>
+#import <YapDatabase/YapDatabase.h>
 #import <YapDatabase/YapDatabaseTransaction.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
+@interface TSAttachmentStream ()
+
+// We only want to generate the file path for this attachment once, so that
+// changes in the file path generation logic don't break existing attachments.
+@property (nullable, nonatomic) NSString *localRelativeFilePath;
+
+// These properties should only be accessed on the main thread.
+@property (nullable, nonatomic) NSNumber *cachedImageWidth;
+@property (nullable, nonatomic) NSNumber *cachedImageHeight;
+@property (nullable, nonatomic) NSNumber *cachedAudioDurationSeconds;
+
+@end
+
+#pragma mark -
+
 @implementation TSAttachmentStream
 
-- (instancetype)initWithContentType:(NSString *)contentType filename:(NSString *)filename
+- (instancetype)initWithContentType:(NSString *)contentType sourceFilename:(nullable NSString *)sourceFilename
 {
-    self = [super initWithContentType:contentType];
+    self = [super initWithContentType:contentType sourceFilename:sourceFilename];
     if (!self) {
         return self;
     }
@@ -24,7 +41,9 @@ NS_ASSUME_NONNULL_BEGIN
     // state, but this constructor is used only for new outgoing
     // attachments which haven't been uploaded yet.
     _isUploaded = NO;
-    _filename = filename;
+    _creationTimestamp = [NSDate new];
+
+    [self ensureFilePath];
 
     return self;
 }
@@ -43,7 +62,28 @@ NS_ASSUME_NONNULL_BEGIN
     // state, but this constructor is used only for new incoming
     // attachments which don't need to be uploaded.
     _isUploaded = YES;
-    _filename = pointer.filename;
+    self.attachmentType = pointer.attachmentType;
+    _creationTimestamp = [NSDate new];
+
+    [self ensureFilePath];
+
+    return self;
+}
+
+- (nullable instancetype)initWithCoder:(NSCoder *)coder
+{
+    self = [super initWithCoder:coder];
+    if (!self) {
+        return self;
+    }
+
+    // OWS105AttachmentFilePaths will ensure the file path is saved if necessary.
+    [self ensureFilePath];
+
+    // OWS105AttachmentFilePaths will ensure the creation timestamp is saved if necessary.
+    if (!_creationTimestamp) {
+        _creationTimestamp = [NSDate new];
+    }
 
     return self;
 }
@@ -61,80 +101,135 @@ NS_ASSUME_NONNULL_BEGIN
     }
 }
 
-#pragma mark - TSYapDatabaseModel overrides
-
-- (void)removeWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+- (void)ensureFilePath
 {
-    [super removeWithTransaction:transaction];
-    [self removeFile];
+    if (self.localRelativeFilePath) {
+        return;
+    }
+
+    NSString *attachmentsFolder = [[self class] attachmentsFolder];
+    NSString *filePath = [MIMETypeUtil filePathForAttachment:self.uniqueId
+                                                  ofMIMEType:self.contentType
+                                              sourceFilename:self.sourceFilename
+                                                    inFolder:attachmentsFolder];
+    if (!filePath) {
+        DDLogError(@"%@ Could not generate path for attachment.", self.tag);
+        OWSAssert(0);
+        return;
+    }
+    if (![filePath hasPrefix:attachmentsFolder]) {
+        DDLogError(@"%@ Attachment paths should all be in the attachments folder.", self.tag);
+        OWSAssert(0);
+        return;
+    }
+    NSString *localRelativeFilePath = [filePath substringFromIndex:attachmentsFolder.length];
+    if (localRelativeFilePath.length < 1) {
+        DDLogError(@"%@ Empty local relative attachment paths.", self.tag);
+        OWSAssert(0);
+        return;
+    }
+
+    self.localRelativeFilePath = localRelativeFilePath;
+    OWSAssert(self.filePath);
 }
 
 #pragma mark - File Management
 
 - (nullable NSData *)readDataFromFileWithError:(NSError **)error
 {
-    return [NSData dataWithContentsOfFile:self.filePath options:0 error:error];
+    *error = nil;
+    NSString *_Nullable filePath = self.filePath;
+    if (!filePath) {
+        DDLogError(@"%@ Missing path for attachment.", self.tag);
+        OWSAssert(0);
+        return nil;
+    }
+    return [NSData dataWithContentsOfFile:filePath options:0 error:error];
 }
 
 - (BOOL)writeData:(NSData *)data error:(NSError **)error
 {
-    DDLogInfo(@"%@ Created file at %@", self.tag, self.filePath);
-    return [data writeToFile:self.filePath options:0 error:error];
+    *error = nil;
+    NSString *_Nullable filePath = self.filePath;
+    if (!filePath) {
+        DDLogError(@"%@ Missing path for attachment.", self.tag);
+        OWSAssert(0);
+        return NO;
+    }
+    DDLogInfo(@"%@ Writing attachment to file: %@", self.tag, filePath);
+    return [data writeToFile:filePath options:0 error:error];
 }
 
 + (NSString *)attachmentsFolder
 {
-    NSString *documentsPath =
-        [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *attachmentFolder = [documentsPath stringByAppendingFormat:@"/Attachments"];
+    static NSString *attachmentsFolder = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSString *documentsPath =
+            [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+        attachmentsFolder = [documentsPath stringByAppendingFormat:@"/Attachments"];
 
-    NSError *error = nil;
-    [[NSFileManager defaultManager] createDirectoryAtPath:attachmentFolder
-                              withIntermediateDirectories:YES
-                                               attributes:nil
-                                                    error:&error];
-    if (error) {
-        DDLogError(@"Failed to create attachments directory: %@", error);
-    }
+        BOOL isDirectory;
+        BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:attachmentsFolder isDirectory:&isDirectory];
+        if (exists) {
+            OWSAssert(isDirectory);
 
-    return attachmentFolder;
-}
-
-+ (NSUInteger)numberOfItemsInAttachmentsFolder
-{
-    NSError *error;
-    NSUInteger count =
-        [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:[self attachmentsFolder] error:&error] count];
-
-    if (error) {
-        DDLogError(@"Unable to count attachments in attachments folder. Error: %@", error);
-    }
-
-    return count;
+            DDLogInfo(@"Attachments directory already exists");
+        } else {
+            NSError *error = nil;
+            [[NSFileManager defaultManager] createDirectoryAtPath:attachmentsFolder
+                                      withIntermediateDirectories:YES
+                                                       attributes:nil
+                                                            error:&error];
+            if (error) {
+                DDLogError(@"Failed to create attachments directory: %@", error);
+            }
+        }
+    });
+    return attachmentsFolder;
 }
 
 - (nullable NSString *)filePath
 {
-    return [MIMETypeUtil filePathForAttachment:self.uniqueId
-                                    ofMIMEType:self.contentType
-                                      filename:self.filename
-                                      inFolder:[[self class] attachmentsFolder]];
+    if (!self.localRelativeFilePath) {
+        OWSAssert(0);
+        return nil;
+    }
+
+    return [[[self class] attachmentsFolder] stringByAppendingPathComponent:self.localRelativeFilePath];
 }
 
 - (nullable NSURL *)mediaURL
 {
-    NSString *filePath = self.filePath;
-    return filePath ? [NSURL fileURLWithPath:filePath] : nil;
+    NSString *_Nullable filePath = self.filePath;
+    if (!filePath) {
+        DDLogError(@"%@ Missing path for attachment.", self.tag);
+        OWSAssert(0);
+        return nil;
+    }
+    return [NSURL fileURLWithPath:filePath];
 }
 
-- (void)removeFile
+- (void)removeFileWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
 {
+    NSString *_Nullable filePath = self.filePath;
+    if (!filePath) {
+        DDLogError(@"%@ Missing path for attachment.", self.tag);
+        OWSAssert(0);
+        return;
+    }
     NSError *error;
-    [[NSFileManager defaultManager] removeItemAtPath:[self filePath] error:&error];
+    [[NSFileManager defaultManager] removeItemAtPath:filePath error:&error];
 
     if (error) {
         DDLogError(@"%@ remove file errored with: %@", self.tag, error);
     }
+}
+
+- (void)removeWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+{
+    [super removeWithTransaction:transaction];
+    [self removeFileWithTransaction:transaction];
 }
 
 - (BOOL)isAnimated {
@@ -155,17 +250,26 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (nullable UIImage *)image
 {
-    if ([self isVideo] || [self isAudio]) {
+    if ([self isVideo]) {
         return [self videoThumbnail];
+    } else if ([self isImage] || [self isAnimated]) {
+        NSURL *_Nullable mediaUrl = [self mediaURL];
+        if (!mediaUrl) {
+            return nil;
+        }
+        return [UIImage imageWithData:[NSData dataWithContentsOfURL:mediaUrl]];
     } else {
-        // [self isAnimated] || [self isImage]
-        return [UIImage imageWithData:[NSData dataWithContentsOfURL:[self mediaURL]]];
+        return nil;
     }
 }
 
 - (nullable UIImage *)videoThumbnail
 {
-    AVURLAsset *asset = [[AVURLAsset alloc] initWithURL:[NSURL fileURLWithPath:self.filePath] options:nil];
+    NSURL *_Nullable mediaUrl = [self mediaURL];
+    if (!mediaUrl) {
+        return nil;
+    }
+    AVURLAsset *asset = [[AVURLAsset alloc] initWithURL:mediaUrl options:nil];
     AVAssetImageGenerator *generate         = [[AVAssetImageGenerator alloc] initWithAsset:asset];
     generate.appliesPreferredTrackTransform = YES;
     NSError *err                            = NULL;
@@ -177,10 +281,191 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)deleteAttachments
 {
     NSError *error;
-    [[NSFileManager defaultManager] removeItemAtPath:[self attachmentsFolder] error:&error];
+
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+
+    NSURL *fileURL = [NSURL fileURLWithPath:self.attachmentsFolder];
+    NSArray<NSURL *> *contents =
+        [fileManager contentsOfDirectoryAtURL:fileURL includingPropertiesForKeys:nil options:0 error:&error];
+
     if (error) {
-        DDLogError(@"Failed to delete attachment folder with error: %@", error.debugDescription);
+        OWSFail(@"failed to get contents of attachments folder: %@ with error: %@", self.attachmentsFolder, error);
+        return;
     }
+
+    for (NSURL *url in contents) {
+        NSError *deletionError;
+        [fileManager removeItemAtURL:url error:&deletionError];
+        if (deletionError) {
+            OWSFail(@"failed to remove item at path: %@ with error: %@", url, deletionError);
+            // continue to try to delete remaining items.
+        }
+    }
+
+    return;
+}
+
+- (CGSize)calculateImageSize
+{
+    if ([self isVideo]) {
+        return [self videoThumbnail].size;
+    } else if ([self isImage] || [self isAnimated]) {
+        NSURL *_Nullable mediaUrl = [self mediaURL];
+        if (!mediaUrl) {
+            return CGSizeZero;
+        }
+
+        // With CGImageSource we avoid loading the whole image into memory.
+        CGImageSourceRef source = CGImageSourceCreateWithURL((CFURLRef)mediaUrl, NULL);
+        if (!source) {
+            OWSAssert(0);
+            return CGSizeZero;
+        }
+
+        NSDictionary *options = @{
+            (NSString *)kCGImageSourceShouldCache : @(NO),
+        };
+        NSDictionary *properties
+            = (__bridge_transfer NSDictionary *)CGImageSourceCopyPropertiesAtIndex(source, 0, (CFDictionaryRef)options);
+        CGSize imageSize = CGSizeZero;
+        if (properties) {
+            NSNumber *width = properties[(NSString *)kCGImagePropertyPixelWidth];
+            NSNumber *height = properties[(NSString *)kCGImagePropertyPixelHeight];
+            if (width && height) {
+                imageSize = CGSizeMake(width.floatValue, height.floatValue);
+            } else {
+                OWSAssert(0);
+            }
+        }
+        CFRelease(source);
+        return imageSize;
+    } else {
+        return CGSizeZero;
+    }
+}
+
+- (CGSize)ensureCachedImageSizeWithTransaction:(YapDatabaseReadWriteTransaction *_Nullable)transaction
+{
+    OWSAssert([NSThread isMainThread]);
+
+    if (self.cachedImageWidth && self.cachedImageHeight) {
+        return CGSizeMake(self.cachedImageWidth.floatValue, self.cachedImageHeight.floatValue);
+    }
+
+    CGSize imageSize = [self calculateImageSize];
+    self.cachedImageWidth = @(imageSize.width);
+    self.cachedImageHeight = @(imageSize.height);
+
+    void (^updateDataStore)() = ^(YapDatabaseReadWriteTransaction *transaction) {
+        OWSAssert(transaction);
+
+        NSString *collection = [[self class] collection];
+        TSAttachmentStream *latestInstance = [transaction objectForKey:self.uniqueId inCollection:collection];
+        if (latestInstance) {
+            latestInstance.cachedImageWidth = @(imageSize.width);
+            latestInstance.cachedImageHeight = @(imageSize.height);
+            [latestInstance saveWithTransaction:transaction];
+        } else {
+            // This message has not yet been saved; do nothing.
+            OWSAssert(0);
+        }
+    };
+
+    if (transaction) {
+        updateDataStore(transaction);
+    } else {
+        [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+            updateDataStore(transaction);
+        }];
+    }
+
+    return imageSize;
+}
+
+- (CGSize)imageSizeWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+{
+    OWSAssert([NSThread isMainThread]);
+    OWSAssert(transaction);
+
+    return [self ensureCachedImageSizeWithTransaction:transaction];
+}
+
+- (CGSize)imageSizeWithoutTransaction
+{
+    OWSAssert([NSThread isMainThread]);
+
+    return [self ensureCachedImageSizeWithTransaction:nil];
+}
+
+- (CGFloat)calculateAudioDurationSeconds
+{
+    OWSAssert([NSThread isMainThread]);
+    OWSAssert([self isAudio]);
+
+    NSError *error;
+    AVAudioPlayer *audioPlayer = [[AVAudioPlayer alloc] initWithContentsOfURL:self.mediaURL error:&error];
+    if (error && [error.domain isEqualToString:NSOSStatusErrorDomain]
+        && (error.code == kAudioFileInvalidFileError || error.code == kAudioFileStreamError_InvalidFile)) {
+        // Ignore "invalid audio file" errors.
+        return 0.f;
+    }
+    OWSAssert(!error);
+    if (!error) {
+        return (CGFloat)[audioPlayer duration];
+    } else {
+        return 0;
+    }
+}
+
+- (CGFloat)ensureCachedAudioDurationSecondsWithTransaction:(YapDatabaseReadWriteTransaction *_Nullable)transaction
+{
+    OWSAssert([NSThread isMainThread]);
+
+    if (self.cachedAudioDurationSeconds) {
+        return self.cachedAudioDurationSeconds.floatValue;
+    }
+
+    CGFloat audioDurationSeconds = [self calculateAudioDurationSeconds];
+    self.cachedAudioDurationSeconds = @(audioDurationSeconds);
+
+    void (^updateDataStore)() = ^(YapDatabaseReadWriteTransaction *transaction) {
+        OWSAssert(transaction);
+
+        NSString *collection = [[self class] collection];
+        TSAttachmentStream *latestInstance = [transaction objectForKey:self.uniqueId inCollection:collection];
+        if (latestInstance) {
+            latestInstance.cachedAudioDurationSeconds = @(audioDurationSeconds);
+            [latestInstance saveWithTransaction:transaction];
+        } else {
+            // This message has not yet been saved; do nothing.
+            OWSAssert(0);
+        }
+    };
+
+    if (transaction) {
+        updateDataStore(transaction);
+    } else {
+        [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+            updateDataStore(transaction);
+        }];
+    }
+
+    return audioDurationSeconds;
+}
+
+- (CGFloat)audioDurationSecondsWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+{
+    OWSAssert([NSThread isMainThread]);
+    OWSAssert(transaction);
+
+    return [self ensureCachedAudioDurationSecondsWithTransaction:transaction];
+}
+
+- (CGFloat)audioDurationSecondsWithoutTransaction
+{
+    OWSAssert([NSThread isMainThread]);
+
+    return [self ensureCachedAudioDurationSecondsWithTransaction:nil];
 }
 
 #pragma mark - Logging

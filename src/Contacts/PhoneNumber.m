@@ -16,20 +16,19 @@ static NSString *const RPDefaultsKeyPhoneNumberCanonical = @"RPDefaultsKeyPhoneN
     OWSAssert(text != nil);
     OWSAssert(regionCode != nil);
 
-    NBPhoneNumberUtil *phoneUtil = [PhoneNumberUtil sharedUtil].nbPhoneNumberUtil;
+    PhoneNumberUtil *phoneUtil = [PhoneNumberUtil sharedUtil];
 
     NSError *parseError   = nil;
     NBPhoneNumber *number = [phoneUtil parse:text defaultRegion:regionCode error:&parseError];
 
     if (parseError) {
-        DDLogWarn(@"Issue while parsing number: %@", [parseError description]);
         return nil;
     }
 
     NSError *toE164Error;
     NSString *e164 = [phoneUtil format:number numberFormat:NBEPhoneNumberFormatE164 error:&toE164Error];
     if (toE164Error) {
-        DDLogWarn(@"Issue while parsing number: %@", [toE164Error description]);
+        DDLogDebug(@"Issue while formatting number: %@", [toE164Error description]);
         return nil;
     }
 
@@ -165,21 +164,23 @@ static NSString *const RPDefaultsKeyPhoneNumberCanonical = @"RPDefaultsKeyPhoneN
         // (ISO 3166-1 alpha-2).
         NSNumber *callingCodeForLocalNumber = [[PhoneNumber phoneNumberFromE164:clientPhoneNumber] getCountryCode];
         if (callingCodeForLocalNumber != nil) {
-            tryParsingWithCountryCode([NSString stringWithFormat:@"+%@%@",
-                                       callingCodeForLocalNumber,
-                                       sanitizedString],
-                                      [self defaultRegionCode]);
+            NSString *callingCodePrefix = [NSString stringWithFormat:@"+%@", callingCodeForLocalNumber];
 
-            // It's gratuitous to try all country codes associated with a given
-            // calling code, but it can't hurt and this isn't a performance
-            // hotspot.
-            NSArray *possibleLocalCountryCodes = [PhoneNumberUtil countryCodesFromCallingCode:[NSString stringWithFormat:@"+%@",
-                                                                                               callingCodeForLocalNumber]];
-            for (NSString *countryCode in possibleLocalCountryCodes) {
-                tryParsingWithCountryCode([NSString stringWithFormat:@"+%@%@",
-                                           callingCodeForLocalNumber,
-                                           sanitizedString],
-                                          countryCode);
+            tryParsingWithCountryCode(
+                [callingCodePrefix stringByAppendingString:sanitizedString], [self defaultRegionCode]);
+
+            // Try to determine what the country code is for the local phone number
+            // and also try parsing the phone number using that country code if it
+            // differs from the device's region code.
+            //
+            // For example, a French person living in Italy might have an
+            // Italian phone number but use French region/language for their
+            // phone. They're likely to have both Italian and French contacts.
+            NSString *localCountryCode =
+                [PhoneNumberUtil.sharedUtil probableCountryCodeForCallingCode:callingCodePrefix];
+            if (localCountryCode && ![localCountryCode isEqualToString:[self defaultRegionCode]]) {
+                tryParsingWithCountryCode(
+                    [callingCodePrefix stringByAppendingString:sanitizedString], localCountryCode);
             }
         }
     }

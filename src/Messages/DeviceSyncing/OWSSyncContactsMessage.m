@@ -8,6 +8,8 @@
 #import "NSDate+millisecondTimeStamp.h"
 #import "OWSContactsOutputStream.h"
 #import "OWSSignalServiceProtos.pb.h"
+#import "OWSIdentityManager.h"
+#import "SignalAccount.h"
 #import "TSAttachment.h"
 #import "TSAttachmentStream.h"
 
@@ -16,12 +18,14 @@ NS_ASSUME_NONNULL_BEGIN
 @interface OWSSyncContactsMessage ()
 
 @property (nonatomic, readonly) id<ContactsManagerProtocol> contactsManager;
+@property (nonatomic, readonly) OWSIdentityManager *identityManager;
 
 @end
 
 @implementation OWSSyncContactsMessage
 
 - (instancetype)initWithContactsManager:(id<ContactsManagerProtocol>)contactsManager
+                        identityManager:(OWSIdentityManager *)identityManager
 {
     self = [super initWithTimestamp:[NSDate ows_millisecondTimeStamp]];
     if (!self) {
@@ -29,11 +33,12 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     _contactsManager = contactsManager;
+    _identityManager = identityManager;
 
     return self;
 }
 
-- (OWSSignalServiceProtosSyncMessage *)buildSyncMessage
+- (OWSSignalServiceProtosSyncMessageBuilder *)syncMessageBuilder
 {
     if (self.attachmentIds.count != 1) {
         DDLogError(@"expected sync contact message to have exactly one attachment, but found %lu",
@@ -47,11 +52,12 @@ NS_ASSUME_NONNULL_BEGIN
         [OWSSignalServiceProtosSyncMessageContactsBuilder new];
 
     [contactsBuilder setBlob:attachmentProto];
+    [contactsBuilder setIsComplete:YES];
 
     OWSSignalServiceProtosSyncMessageBuilder *syncMessageBuilder = [OWSSignalServiceProtosSyncMessageBuilder new];
     [syncMessageBuilder setContactsBuilder:contactsBuilder];
 
-    return [syncMessageBuilder build];
+    return syncMessageBuilder;
 }
 
 - (NSData *)buildPlainTextAttachmentData
@@ -63,8 +69,10 @@ NS_ASSUME_NONNULL_BEGIN
     [dataOutputStream open];
     OWSContactsOutputStream *contactsOutputStream = [OWSContactsOutputStream streamWithOutputStream:dataOutputStream];
 
-    for (Contact *contact in self.contactsManager.signalContacts) {
-        [contactsOutputStream writeContact:contact];
+    for (SignalAccount *signalAccount in self.contactsManager.signalAccounts) {
+        OWSRecipientIdentity *recipientIdentity = [self.identityManager recipientIdentityForRecipientId:signalAccount.recipientId];
+        
+        [contactsOutputStream writeSignalAccount:signalAccount recipientIdentity:recipientIdentity];
     }
 
     [contactsOutputStream flush];

@@ -16,6 +16,8 @@ typedef enum {
     // These call types are used until the call connects.
     RPRecentCallTypeOutgoingIncomplete,
     RPRecentCallTypeIncomingIncomplete,
+    RPRecentCallTypeMissedBecauseOfChangedIdentity,
+    RPRecentCallTypeIncomingDeclined
 } RPRecentCallType;
 
 @interface TSCall : TSInteraction <OWSReadTracking>

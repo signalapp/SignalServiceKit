@@ -1,9 +1,5 @@
 //
-//  TSStorageManager+keyingMaterial.m
-//  TextSecureKit
-//
-//  Created by Frederic Jacobs on 06/11/14.
-//  Copyright (c) 2014 Open Whisper Systems. All rights reserved.
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
 //
 
 #import "TSStorageManager+keyingMaterial.h"
@@ -17,6 +13,7 @@
 
 - (NSString *)localNumber
 {
+    // TODO cache this? It only changes once, ever, and otherwise causes "surprising" transactions to occur.
     return [self stringForKey:TSStorageRegisteredNumberKey inCollection:TSStorageUserAccountCollection];
 }
 
@@ -56,7 +53,7 @@
 
 - (void)storePhoneNumber:(NSString *)phoneNumber
 {
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+    [self.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [transaction setObject:phoneNumber
                         forKey:TSStorageRegisteredNumberKey
                   inCollection:TSStorageUserAccountCollection];
@@ -64,13 +61,12 @@
 }
 
 + (void)storeServerToken:(NSString *)authToken signalingKey:(NSString *)signalingKey {
-    YapDatabaseConnection *dbConn = [[self sharedManager] dbConnection];
-
-    [dbConn readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-      [transaction setObject:authToken forKey:TSStorageServerAuthToken inCollection:TSStorageUserAccountCollection];
-      [transaction setObject:signalingKey
-                      forKey:TSStorageServerSignalingKey
-                inCollection:TSStorageUserAccountCollection];
+    TSStorageManager *sharedManager = self.sharedManager;
+    [sharedManager.dbReadWriteConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+        [transaction setObject:authToken forKey:TSStorageServerAuthToken inCollection:TSStorageUserAccountCollection];
+        [transaction setObject:signalingKey
+                        forKey:TSStorageServerSignalingKey
+                  inCollection:TSStorageUserAccountCollection];
 
     }];
 }
